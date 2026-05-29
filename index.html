@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Microfiber Smart ROP</title>
+  <!-- Tailwind CSS & Google Fonts (Kanit) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js CDN for Mobile-responsive Line Chart -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Firebase SDKs (Compat version for offline-ready direct browser runs) -->
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-analytics-compat.js"></script>
+  
+  <style>
+    body {
+      font-family: 'Kanit', sans-serif;
+      background: linear-gradient(135deg, #fef3c7 0%, #e0f2fe 100%);
+    }
+    .card-shadow {
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+    }
+    .scrollbar-none::-webkit-scrollbar {
+      display: none;
+    }
+    .scrollbar-none {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-24">
+
+  <!-- Header Banner -->
+  <div class="bg-gradient-to-r from-teal-500 via-emerald-400 to-amber-400 text-white p-6 rounded-b-3xl shadow-lg text-center">
+    <h1 class="text-2xl font-bold tracking-wide"><i class="fa-solid fa-layer-group mr-2"></i>ระบบคำนวณสั่งผ้าไมโครไฟเบอร์</h1>
+    <div class="flex items-center justify-center mt-1 space-x-1">
+      <span class="text-xs opacity-90">วางแผน ROP และจัดการสต็อกนำเข้าจากจีน</span>
+      <!-- จุดแจ้งสถานะระบบคลาวด์ Firebase -->
+      <span id="cloud-status" class="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-500/40 text-slate-200">
+        <i class="fa-solid fa-spinner animate-spin"></i> กำลังเชื่อมต่อคลาวด์...
+      </span>
+    </div>
+  </div>
+
+  <div class="max-w-md mx-auto px-4 mt-6">
+    
+    <!-- Tab Navigation (Top Bar) -->
+    <div class="flex space-x-1 bg-white/80 backdrop-blur-md p-1 rounded-2xl shadow-sm mb-6 border border-teal-100 overflow-x-auto scrollbar-none">
+      <button onclick="switchTab('dashboard')" id="btn-dashboard" class="flex-1 py-2 px-1 text-xs font-semibold rounded-xl transition-all duration-300 text-center bg-teal-500 text-white shadow-sm whitespace-nowrap">
+        ROP
+      </button>
+      <button onclick="switchTab('shipments')" id="btn-shipments" class="flex-1 py-2 px-1 text-xs font-semibold rounded-xl transition-all duration-300 text-center text-slate-600 hover:bg-slate-100 whitespace-nowrap">
+        สั่งของจากจีน
+      </button>
+      <button onclick="switchTab('history')" id="btn-history" class="flex-1 py-2 px-1 text-xs font-semibold rounded-xl transition-all duration-300 text-center text-slate-600 hover:bg-slate-100 whitespace-nowrap">
+        ประวัติถึงไทย
+      </button>
+      <button onclick="switchTab('sales')" id="btn-sales" class="flex-1 py-2 px-1 text-xs font-semibold rounded-xl transition-all duration-300 text-center text-slate-600 hover:bg-slate-100 whitespace-nowrap">
+        บันทึกยอดขาย
+      </button>
+    </div>
+
+    <!-- ==================== TAB 1: DASHBOARD ==================== -->
+    <div id="tab-dashboard" class="space-y-6">
+      <!-- คลังสินค้าปัจจุบัน -->
+      <div class="bg-white rounded-3xl p-6 card-shadow border-t-8 border-teal-400">
+        <div class="flex justify-between items-center mb-4">
+          <span class="text-slate-500 font-medium"><i class="fa-solid fa-warehouse text-teal-500 mr-2"></i>วันนี้มีผ้าอยู่ (สต็อกจริง)</span>
+          <button onclick="editCurrentStock()" class="text-teal-600 hover:text-teal-800 text-sm"><i class="fa-solid fa-pen"></i> แก้ไข</button>
+        </div>
+        <div class="text-4xl font-extrabold text-teal-600 mb-2" id="display-current-stock">0 <span class="text-lg text-slate-500 font-normal">ผืน</span></div>
+        <div class="text-xs text-slate-400 border-t pt-2 flex justify-between">
+          <span>สต็อกจะหมดใน: <strong class="text-rose-500" id="display-days-left">0 วัน</strong> (คิดจากยอดปกติ)</span>
+          <span>ยอดขายปกติ: <strong id="display-sales-normal">0</strong> /วัน</span>
+        </div>
+      </div>
+
+      <!-- ข้อมูล ROP & สรุปสถานะ -->
+      <div class="bg-white rounded-3xl p-6 card-shadow border-t-8 border-amber-400">
+        <h3 class="font-bold text-slate-700 text-lg mb-4 flex items-center">
+          <span class="bg-amber-100 text-amber-600 p-2 rounded-xl mr-2"><i class="fa-solid fa-calculator"></i></span>
+          วิเคราะห์จุดสั่งซื้อ ROP
+        </h3>
+        
+        <div class="grid grid-cols-2 gap-4 mb-4 bg-slate-50 p-3 rounded-2xl">
+          <div class="text-center border-r border-slate-200">
+            <span class="text-xs text-slate-400 block">กำลังเดินทางมา</span>
+            <span class="text-xl font-bold text-sky-600" id="display-pending-qty">0</span>
+          </div>
+          <div class="text-center">
+            <span class="text-xs text-slate-400 block">สต็อกรวมทั้งสิ้น</span>
+            <span class="text-xl font-bold text-emerald-600" id="display-total-stock">0</span>
+          </div>
+        </div>
+
+        <!-- รายการ ROP 5 รูปแบบ -->
+        <div class="space-y-3">
+          <!-- 1 -->
+          <div class="flex justify-between items-center p-3 rounded-2xl border border-slate-100">
+            <div>
+              <p class="text-xs text-slate-400">ขนส่งปกติ × ขายปกติ</p>
+              <p class="font-semibold text-slate-700" id="rop-label-1">ROP: 0</p>
+            </div>
+            <span id="rop-status-1" class="text-xs font-bold px-3 py-1.5 rounded-full"></span>
+          </div>
+          <!-- 2 -->
+          <div class="flex justify-between items-center p-3 rounded-2xl border border-slate-100 bg-amber-50/50">
+            <div>
+              <p class="text-xs text-slate-400">ขนส่งปกติ × ขายดี</p>
+              <p class="font-semibold text-amber-700" id="rop-label-2">ROP: 0</p>
+            </div>
+            <span id="rop-status-2" class="text-xs font-bold px-3 py-1.5 rounded-full"></span>
+          </div>
+          <!-- 3 -->
+          <div class="flex justify-between items-center p-3 rounded-2xl border border-slate-100">
+            <div>
+              <p class="text-xs text-slate-400">ขนส่งล่าช้า × ขายปกติ</p>
+              <p class="font-semibold text-slate-700" id="rop-label-3">ROP: 0</p>
+            </div>
+            <span id="rop-status-3" class="text-xs font-bold px-3 py-1.5 rounded-full"></span>
+          </div>
+          <!-- 4 -->
+          <div class="flex justify-between items-center p-3 rounded-2xl border border-slate-100 bg-rose-50/50">
+            <div>
+              <p class="text-xs text-slate-400">ขนส่งล่าช้า × ขายดี</p>
+              <p class="font-semibold text-rose-700" id="rop-label-4">ROP: 0</p>
+            </div>
+            <span id="rop-status-4" class="text-xs font-bold px-3 py-1.5 rounded-full"></span>
+          </div>
+          <!-- 5 (เฉลี่ยขายดี) -->
+          <div class="flex justify-between items-center p-3 rounded-2xl border-2 border-dashed border-teal-200 bg-teal-50/30">
+            <div>
+              <p class="text-xs text-teal-600 font-semibold">เฉลี่ยขายดี (แนะนำ)</p>
+              <p class="font-bold text-teal-800" id="rop-label-avg">ROP: 0</p>
+            </div>
+            <span id="rop-status-avg" class="text-xs font-bold px-3 py-1.5 rounded-full"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ==================== TAB 2: SHIPMENTS ==================== -->
+    <div id="tab-shipments" class="space-y-6 hidden">
+      <!-- ส่วนเพิ่มของสั่งใหม่ -->
+      <div class="bg-white rounded-3xl p-6 card-shadow border-t-8 border-sky-400">
+        <h3 class="font-bold text-slate-700 text-lg mb-4 flex items-center">
+          <span class="bg-sky-100 text-sky-600 p-2 rounded-xl mr-2"><i class="fa-solid fa-plus"></i></span>
+          เพิ่มรายการสั่งของจากจีน
+        </h3>
+        <form id="shipment-form" class="space-y-4" onsubmit="addShipment(event)">
+          <div>
+            <label class="block text-xs text-slate-500 mb-1">วันที่ปิดตู้</label>
+            <input type="date" id="ship-close-date" required class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-400">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-500 mb-1">จำนวนที่สั่ง (ผืน)</label>
+            <input type="number" id="ship-qty" required placeholder="เช่น 15000" class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-400">
+          </div>
+          <button type="submit" class="w-full py-3 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl transition-all shadow-md"><i class="fa-solid fa-save mr-1"></i> บันทึกรายการ</button>
+        </form>
+      </div>
+
+      <!-- รายชื่อของกำลังมาส่ง -->
+      <div class="bg-white rounded-3xl p-6 card-shadow border-t-8 border-indigo-400">
+        <h3 class="font-bold text-slate-700 text-lg mb-4 flex items-center">
+          <span class="bg-indigo-100 text-indigo-600 p-2 rounded-xl mr-2"><i class="fa-solid fa-truck-ramp-box"></i></span>
+          สถานะสินค้ากำลังเดินทาง
+        </h3>
+        <div class="space-y-3" id="shipment-list-container">
+          <!-- โหลดข้อมูลแบบการ์ดมือถือ -->
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ==================== TAB 3: HISTORY ==================== -->
+    <div id="tab-history" class="space-y-6 hidden">
+      <div class="bg-white rounded-3xl p-6 card-shadow border-t-8 border-emerald-400">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="font-bold text-slate-700 text-lg flex items-center">
+            <span class="bg-emerald-100 text-emerald-600 p-2 rounded-xl mr-2"><i class="fa-solid fa-clipboard-check"></i></span>
+            ประวัติของถึงไทย (เปรียบเทียบเวลา)
+          </h3>
+          <button onclick="clearReceivedHistory()" class="text-rose-500 hover:text-rose-700 text-xs"><i class="fa-solid fa-trash-can"></i> ล้างประวัติ</button>
+        </div>
+        <p class="text-xs text-slate-400 mb-4"><i class="fa-solid fa-circle-info mr-1 text-slate-300"></i>แสดงประวัติคำนวณวันเดินทางจริงนับจากวันที่ปิดตู้จนของมาถึงไทย</p>
+        <div class="space-y-3" id="received-history-container">
+          <!-- โหลดประวัติการรับสินค้า -->
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ==================== TAB 4: SALES ==================== -->
+    <div id="tab-sales" class="space-y-6 hidden">
+      <!-- บันทึกยอดขายรายวัน -->
+      <div class="bg-white rounded-3xl p-6 card-shadow border-t-8 border-emerald-400">
+        <h3 class="font-bold text-slate-700 text-lg mb-4 flex items-center">
+          <span class="bg-emerald-100 text-emerald-600 p-2 rounded-xl mr-2"><i class="fa-solid fa-cash-register"></i></span>
+          บันทึกการขายประจำวัน
+        </h3>
+        <form id="sale-form" class="space-y-4" onsubmit="addSaleLog(event)">
+          <div>
+            <label class="block text-xs text-slate-500 mb-1">วันที่ขาย</label>
+            <input type="date" id="sale-date" required class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-500 mb-1">จำนวนผืนที่ขายได้</label>
+            <input type="number" id="sale-qty" required placeholder="เช่น 2000" class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400">
+          </div>
+          <div class="flex items-center space-x-2">
+            <input type="checkbox" id="deduct-stock" checked class="w-5 h-5 text-emerald-500 rounded focus:ring-emerald-400">
+            <label for="deduct-stock" class="text-xs text-slate-600">หักออกจากสต็อกปัจจุบันทันที</label>
+          </div>
+          <button type="submit" class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition-all shadow-md"><i class="fa-solid fa-plus mr-1"></i> บันทึกข้อมูลการขาย</button>
+        </form>
+      </div>
+
+      <!-- กลุ่มรายงานและประวัติการขายประจำเดือน (พับ/ยืดและกราฟเส้น) -->
+      <div class="bg-white rounded-3xl p-6 card-shadow border-t-8 border-pink-400">
+        <div class="mb-4">
+          <h3 class="font-bold text-slate-700 text-lg flex items-center">
+            <span class="bg-pink-100 text-pink-600 p-2 rounded-xl mr-2"><i class="fa-solid fa-chart-line"></i></span>
+            สถิติประวัติยอดขาย
+          </h3>
+        </div>
+        
+        <!-- รายการ Accordion กลุ่มเดือนจะโหลดที่นี่ -->
+        <div class="space-y-4" id="sales-monthly-accordion-container">
+          <!-- รายเดือนและกราฟ -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SYSTEM SETTINGS ==================== -->
+    <div class="mt-8 bg-slate-100/80 backdrop-blur-sm p-4 rounded-3xl border border-slate-200">
+      <details class="group">
+        <summary class="list-none flex justify-between items-center cursor-pointer font-semibold text-slate-600 text-sm">
+          <span><i class="fa-solid fa-gear mr-2 text-slate-500"></i> การตั้งค่าระบบสูตร ROP</span>
+          <span class="transition group-open:rotate-180"><i class="fa-solid fa-chevron-down"></i></span>
+        </summary>
+        <div class="mt-4 pt-4 border-t border-slate-200 space-y-4 text-xs">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-500 mb-1">ยอดขาย/วัน (ปกติ)</label>
+              <input type="number" id="setting-sales-normal" onchange="updateSettings()" class="w-full p-2 border rounded-lg bg-white">
+            </div>
+            <div>
+              <label class="block text-slate-500 mb-1">ยอดขาย/วัน (ขายดี)</label>
+              <input type="number" id="setting-sales-best" onchange="updateSettings()" class="w-full p-2 border rounded-lg bg-white">
+            </div>
+            <div>
+              <label class="block text-slate-500 mb-1">ระยะเวลาขนส่งปกติ (วัน)</label>
+              <input type="number" id="setting-lt-normal" onchange="updateSettings()" class="w-full p-2 border rounded-lg bg-white">
+            </div>
+            <div>
+              <label class="block text-slate-500 mb-1">ระยะเวลาขนส่งช้า (วัน)</label>
+              <input type="number" id="setting-lt-delay" onchange="updateSettings()" class="w-full p-2 border rounded-lg bg-white">
+            </div>
+          </div>
+          
+          <div class="bg-amber-50 p-3 rounded-2xl border border-amber-200 mt-2">
+            <div class="flex items-center space-x-2 mb-2">
+              <input type="checkbox" id="setting-use-test-date" onchange="updateSettings()" class="w-4 h-4 text-amber-500 rounded">
+              <label for="setting-use-test-date" class="font-bold text-amber-800">จำลองวันที่ปัจจุบันในแอป</label>
+            </div>
+            <p class="text-[10px] text-amber-700 mb-2">เลือกเพื่อใช้วันที่ทดสอบตามรูปภาพ หากไม่เลือกแอปจะใช้วันที่จริงวันนี้</p>
+            <input type="date" id="setting-test-date" onchange="updateSettings()" class="w-full p-2 border rounded-lg bg-white">
+          </div>
+          
+          <button onclick="resetToDemoData()" type="button" class="w-full py-2 bg-slate-500 hover:bg-slate-600 text-white rounded-lg transition-all font-semibold">
+            <i class="fa-solid fa-arrow-rotate-left mr-1"></i> โหลดข้อมูลตัวอย่างเริ่มต้น
+          </button>
+        </div>
+      </details>
+    </div>
+
+  </div>
+
+  <!-- ==================== MODAL: EDIT SHIPMENT ==================== -->
+  <div id="edit-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-white rounded-3xl w-full max-w-sm p-6 card-shadow border-t-8 border-indigo-500">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="font-bold text-slate-700 text-lg"><i class="fa-solid fa-edit mr-1 text-indigo-500"></i> แก้ไขข้อมูลนำเข้า</h3>
+        <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-circle-xmark"></i></button>
+      </div>
+      <form id="edit-shipment-form" class="space-y-4" onsubmit="saveEditedShipment(event)">
+        <input type="hidden" id="edit-ship-id">
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">วันที่ปิดตู้</label>
+          <input type="date" id="edit-ship-close-date" required class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">จำนวนที่สั่ง (ผืน)</label>
+          <input type="number" id="edit-ship-qty" required class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+        </div>
+        <div class="flex space-x-3 pt-2">
+          <button type="button" onclick="closeEditModal()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl transition-all">ยกเลิก</button>
+          <button type="submit" class="flex-1 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl transition-all shadow-md">บันทึกแก้ไข</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Bottom Nav Bar for Mobile -->
+  <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-100 py-2 flex justify-around items-center shadow-lg z-50">
+    <button onclick="switchTab('dashboard')" id="nav-dashboard" class="flex flex-col items-center text-teal-500">
+      <i class="fa-solid fa-chart-pie text-lg"></i>
+      <span class="text-[9px] mt-0.5 font-medium">แดชบอร์ด ROP</span>
+    </button>
+    <button onclick="switchTab('shipments')" id="nav-shipments" class="flex flex-col items-center text-slate-400">
+      <i class="fa-solid fa-ship text-lg"></i>
+      <span class="text-[9px] mt-0.5 font-medium">สั่งของจากจีน</span>
+    </button>
+    <button onclick="switchTab('history')" id="nav-history" class="flex flex-col items-center text-slate-400">
+      <i class="fa-solid fa-clipboard-check text-lg"></i>
+      <span class="text-[9px] mt-0.5 font-medium">ประวัติถึงไทย</span>
+    </button>
+    <button onclick="switchTab('sales')" id="nav-sales" class="flex flex-col items-center text-slate-400">
+      <i class="fa-solid fa-cart-shopping text-lg"></i>
+      <span class="text-[9px] mt-0.5 font-medium">บันทึกยอดขาย</span>
+    </button>
+  </div>
+
+  <script>
+    // ชุดข้อมูลยอดขายที่บันทึกไว้ตั้งแต่ต้นเดือนพฤษภาคม 2026
+    const preseededSales = [
+      { id: 101, date: "2026-05-01", qty: 1626, deducted: false },
+      { id: 102, date: "2026-05-02", qty: 2090, deducted: false },
+      { id: 103, date: "2026-05-03", qty: 2090, deducted: false },
+      { id: 104, date: "2026-05-04", qty: 2072, deducted: false },
+      { id: 105, date: "2026-05-05", qty: 2953, deducted: false },
+      { id: 106, date: "2026-05-06", qty: 1553, deducted: false },
+      { id: 107, date: "2026-05-07", qty: 1380, deducted: false },
+      { id: 108, date: "2026-05-08", qty: 2010, deducted: false },
+      { id: 109, date: "2026-05-09", qty: 1676, deducted: false },
+      { id: 110, date: "2026-05-10", qty: 1676, deducted: false },
+      { id: 111, date: "2026-05-11", qty: 1721, deducted: false },
+      { id: 112, date: "2026-05-12", qty: 1601, deducted: false },
+      { id: 113, date: "2026-05-13", qty: 3383, deducted: false },
+      { id: 114, date: "2026-05-14", qty: 1353, deducted: false },
+      { id: 115, date: "2026-05-15", qty: 1971, deducted: false },
+      { id: 116, date: "2026-05-16", qty: 1891, deducted: false },
+      { id: 117, date: "2026-05-17", qty: 1891, deducted: false },
+      { id: 118, date: "2026-05-18", qty: 1735, deducted: false },
+      { id: 119, date: "2026-05-19", qty: 2920, deducted: false },
+      { id: 120, date: "2026-05-20", qty: 1900, deducted: false },
+      { id: 121, date: "2026-05-21", qty: 2100, deducted: false },
+      { id: 122, date: "2026-05-22", qty: 1951, deducted: false },
+      { id: 123, date: "2026-05-23", qty: 2447, deducted: false },
+      { id: 124, date: "2026-05-24", qty: 2447, deducted: false },
+      { id: 125, date: "2026-05-25", qty: 1982, deducted: false },
+      { id: 126, date: "2026-05-26", qty: 2640, deducted: false },
+      { id: 127, date: "2026-05-27", qty: 2260, deducted: false },
+      { id: 128, date: "2026-05-28", qty: 2461, deducted: false }
+    ];
+
+    const defaultData = {
+      currentStock: 11000,
+      salesNormal: 2000,
+      salesBest: 2041,
+      ltNormal: 19,
+      ltDelay: 30,
+      testDate: "2026-05-23", 
+      useTestDate: true,
+      shipments: [
+        { id: 1, closeDate: "2026-05-04", qty: 15000 },
+        { id: 2, closeDate: "2026-05-13", qty: 15000 },
+        { id: 3, closeDate: "2026-05-21", qty: 15000 },
+        { id: 4, closeDate: "2026-05-27", qty: 15000 }
+      ],
+      salesLogs: preseededSales,
+      receivedHistory: [] 
+    };
+
+    let appData = JSON.parse(localStorage.getItem('microfiber_rop_data_v4')) || defaultData;
+    window.activeCharts = {};
+
+    // -------------------------------------------------------------
+    // INTEGRATE FIREBASE REALTIME DATABASE (COMPAT VERSION)
+    // -------------------------------------------------------------
+    const firebaseConfig = {
+      apiKey: "AIzaSyCXSWM419rJYrzi-ICFj9HJxWLiPICbJHc",
+      authDomain: "l-boss.firebaseapp.com",
+      projectId: "l-boss",
+      storageBucket: "l-boss.firebasestorage.app",
+      messagingSenderId: "1038706773779",
+      appId: "1:1038706773779:web:454286f6d789fd6280d4e6",
+      measurementId: "G-R3MST7FWGY"
+    };
+
+    let database = null;
+    let dbRef = null;
+
+    try {
+      firebase.initializeApp(firebaseConfig);
+      database = firebase.database();
+      dbRef = database.ref('microfiber_rop_data');
+
+      // ตรวจสอบสถานะการเชื่อมต่อ และโหลดข้อมูลครั้งแรกจากคลาวด์
+      dbRef.once('value').then((snapshot) => {
+        const cloudData = snapshot.val();
+        if (cloudData) {
+          appData = cloudData;
+        } else {
+          // หากบนคลาวด์ว่างเปล่า ให้ส่งค่าตั้งต้นขึ้นไป
+          dbRef.set(appData);
+        }
+        updateCloudStatus(true);
+        renderAll();
+      }).catch((err) => {
+        console.warn("ไม่สามารถดึงข้อมูลจาก Firebase ได้ชั่วคราว, กำลังรันโหมดเครื่องเครื่อง:", err);
+        updateCloudStatus(false);
+        renderAll();
+      });
+
+      // ซิงก์ข้อมูลแบบเรียลไทม์หากเปิดใช้งานสองอุปกรณ์พร้อมกัน
+      dbRef.on('value', (snapshot) => {
+        const cloudData = snapshot.val();
+        if (cloudData) {
+          appData = cloudData;
+          renderAll();
+        }
+      });
+
+    } catch (e) {
+      console.error("การเริ่มต้นใช้งาน Firebase ผิดพลาด:", e);
+      updateCloudStatus(false);
+    }
+
+    // ฟังก์ชันเปลี่ยนสถานะคลาวด์สีด้านบนสุดของแอป
+    function updateCloudStatus(isOnline) {
+      const statusSpan = document.getElementById('cloud-status');
+      if (isOnline) {
+        statusSpan.className = "text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/40 text-emerald-100";
+        statusSpan.innerHTML = `<i class="fa-solid fa-cloud"></i> เชื่อมต่อคลาวด์แล้ว`;
+      } else {
+        statusSpan.className = "text-[9px] px-1.5 py-0.5 rounded-full bg-rose-500/40 text-rose-100";
+        statusSpan.innerHTML = `<i class="fa-solid fa-cloud-slash"></i> ทำงานออฟไลน์ (เซฟในเครื่อง)`;
+      }
+    }
+
+    // ฟังก์ชันบันทึกข้อมูลแบบ Hybrid (ลงเครื่องด้วย + ยิงขึ้นคลาวด์ทันที)
+    function saveData() {
+      localStorage.setItem('microfiber_rop_data_v4', JSON.stringify(appData));
+      if (dbRef) {
+        dbRef.set(appData).then(() => {
+          updateCloudStatus(true);
+        }).catch((err) => {
+          console.warn("การอัปโหลดข้อมูลลงคลาวด์ขัดข้องชั่วคราว:", err);
+          updateCloudStatus(false);
+        });
+      }
+    }
+
+    function addDays(dateStr, days) {
+      const date = new Date(dateStr);
+      date.setDate(date.getDate() + days);
+      return date.toISOString().split('T')[0];
+    }
+
+    function getDaysDiff(fromDate, toDate) {
+      const f = new Date(fromDate);
+      f.setHours(0,0,0,0);
+      const t = new Date(toDate);
+      t.setHours(0,0,0,0);
+      return Math.ceil((t - f) / (1000 * 60 * 60 * 24));
+    }
+
+    function switchTab(tabName) {
+      document.getElementById('tab-dashboard').classList.add('hidden');
+      document.getElementById('tab-shipments').classList.add('hidden');
+      document.getElementById('tab-history').classList.add('hidden');
+      document.getElementById('tab-sales').classList.add('hidden');
+
+      document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+
+      const tabs = ['dashboard', 'shipments', 'history', 'sales'];
+      tabs.forEach(t => {
+        const btn = document.getElementById(`btn-${t}`);
+        const nav = document.getElementById(`nav-${t}`);
+        if(t === tabName) {
+          btn.className = "flex-1 py-2 px-1 text-xs font-semibold rounded-xl transition-all duration-300 text-center bg-teal-500 text-white shadow-sm whitespace-nowrap";
+          nav.className = "flex flex-col items-center text-teal-500";
+        } else {
+          btn.className = "flex-1 py-2 px-1 text-xs font-semibold rounded-xl transition-all duration-300 text-center text-slate-600 hover:bg-slate-100 whitespace-nowrap";
+          nav.className = "flex flex-col items-center text-slate-400";
+        }
+      });
+    }
+
+    function renderAll() {
+      const salesNormal = parseInt(appData.salesNormal) || 0;
+      const salesBest = parseInt(appData.salesBest) || 0;
+      const ltNormal = parseInt(appData.ltNormal) || 0;
+      const ltDelay = parseInt(appData.ltDelay) || 0;
+
+      let today = new Date();
+      if (appData.useTestDate && appData.testDate) {
+        today = new Date(appData.testDate);
+      }
+      today.setHours(0,0,0,0);
+      const todayStr = today.toISOString().split('T')[0];
+
+      let totalPendingStock = 0;
+      appData.shipments.forEach(item => {
+        totalPendingStock += parseInt(item.qty) || 0;
+      });
+
+      const currentStock = parseInt(appData.currentStock) || 0;
+      const totalStock = currentStock + totalPendingStock;
+
+      document.getElementById('display-current-stock').innerText = currentStock.toLocaleString();
+      document.getElementById('display-sales-normal').innerText = salesNormal.toLocaleString();
+      
+      const daysLeft = salesNormal > 0 ? Math.round(currentStock / salesNormal) : 0;
+      document.getElementById('display-days-left').innerText = `${daysLeft} วัน`;
+
+      document.getElementById('display-pending-qty').innerText = totalPendingStock.toLocaleString();
+      document.getElementById('display-total-stock').innerText = totalStock.toLocaleString();
+
+      const rop1 = ltNormal * salesNormal;
+      const rop2 = ltNormal * salesBest;
+      const rop3 = ltDelay * salesNormal;
+      const rop4 = ltDelay * salesBest;
+      const ropAvg = Math.round((rop2 + rop4) / 2);
+
+      document.getElementById('rop-label-1').innerText = `ROP: ${rop1.toLocaleString()}`;
+      document.getElementById('rop-label-2').innerText = `ROP: ${rop2.toLocaleString()}`;
+      document.getElementById('rop-label-3').innerText = `ROP: ${rop3.toLocaleString()}`;
+      document.getElementById('rop-label-4').innerText = `ROP: ${rop4.toLocaleString()}`;
+      document.getElementById('rop-label-avg').innerText = `ROP: ${ropAvg.toLocaleString()}`;
+
+      setBadge('rop-status-1', totalStock >= rop1);
+      setBadge('rop-status-2', totalStock >= rop2);
+      setBadge('rop-status-3', totalStock >= rop3);
+      setBadge('rop-status-4', totalStock >= rop4);
+      setBadge('rop-status-avg', totalStock >= ropAvg);
+
+      renderShipments(todayStr, salesNormal, ltNormal, ltDelay);
+      renderReceivedHistory();
+      renderSalesList(); 
+    }
+
+    function setBadge(elementId, isSafe) {
+      const badge = document.getElementById(elementId);
+      if(isSafe) {
+        badge.innerText = "ยังไม่ต้องสั่ง";
+        badge.className = "text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200";
+      } else {
+        badge.innerText = "ต้องสั่งของใหม่!";
+        badge.className = "text-xs font-bold px-3 py-1.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 animate-pulse";
+      }
+    }
+
+    function renderShipments(todayStr, salesNormal, ltNormal, ltDelay) {
+      const container = document.getElementById('shipment-list-container');
+      container.innerHTML = "";
+
+      if(appData.shipments.length === 0) {
+        container.innerHTML = "<p class='text-sm text-slate-400 text-center py-4'>ไม่มีรายการสินค้ากำลังเดินทางในขณะนี้</p>";
+        return;
+      }
+
+      appData.shipments.forEach(item => {
+        const arrivalNormalDate = addDays(item.closeDate, ltNormal);
+        const arrivalDelayDate = addDays(item.closeDate, ltDelay);
+
+        const diffNormalDays = getDaysDiff(todayStr, arrivalNormalDate);
+        const diffDelayDays = getDaysDiff(todayStr, arrivalDelayDate);
+
+        const daysToOut = salesNormal > 0 ? Math.round(appData.currentStock / salesNormal) : 0;
+
+        const normalTagClass = diffNormalDays <= 0 ? "bg-emerald-100 text-emerald-800" : (diffNormalDays <= daysToOut ? "bg-sky-100 text-sky-800" : "bg-amber-100 text-amber-800");
+        const delayTagClass = diffDelayDays <= 0 ? "bg-emerald-100 text-emerald-800" : (diffDelayDays <= daysToOut ? "bg-sky-100 text-sky-800" : "bg-rose-100 text-rose-800");
+
+        let warningHTML = "";
+        if (diffNormalDays > daysToOut && diffNormalDays > 0) {
+          warningHTML += `<p class="text-[11px] text-amber-600 mt-1 font-semibold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>สต็อกปัจจุบันจะขาดก่อนของปกติมาถึง ราว ๆ ${diffNormalDays - daysToOut} วัน</p>`;
+        }
+        if (diffDelayDays > daysToOut && diffDelayDays > 0) {
+          warningHTML += `<p class="text-[11px] text-rose-500 mt-0.5 font-semibold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>สต็อกปัจจุบันจะขาดก่อนของแบบช้ามาถึง ราว ๆ ${diffDelayDays - daysToOut} วัน</p>`;
+        }
+
+        const card = document.createElement('div');
+        card.className = "p-4 border border-slate-100 rounded-2xl bg-white card-shadow flex flex-col space-y-3 relative";
+        card.innerHTML = `
+          <div class="absolute top-4 right-4 flex space-x-2">
+            <button onclick="openEditModal(${item.id})" class="text-indigo-400 hover:text-indigo-600 transition p-1"><i class="fa-solid fa-pen-to-square text-base"></i></button>
+            <button onclick="deleteShipment(${item.id})" class="text-slate-300 hover:text-rose-500 transition p-1"><i class="fa-solid fa-trash-can text-base"></i></button>
+          </div>
+
+          <div>
+            <p class="text-sm font-bold text-slate-800 flex items-center">
+              <span class="bg-indigo-50 text-indigo-600 text-xs px-2 py-0.5 rounded-md mr-2">นำเข้า</span>
+              ${item.qty.toLocaleString()} ผืน
+            </p>
+            <p class="text-xs text-slate-500 mt-1"><i class="fa-solid fa-calendar-check mr-1 text-slate-400"></i>วันที่ปิดตู้: <strong class="text-slate-700">${formatDateThai(item.closeDate)}</strong></p>
+          </div>
+
+          <div class="pt-2 border-t border-dashed border-slate-100 space-y-2 text-xs">
+            <div class="flex justify-between items-center bg-slate-50 p-2 rounded-xl">
+              <div>
+                <p class="text-slate-400 text-[10px] font-medium">วันของมาถึง (ปกติ +${ltNormal} วัน)</p>
+                <p class="font-bold text-slate-700">${formatDateThai(arrivalNormalDate)}</p>
+              </div>
+              <span class="text-[10px] px-2 py-1 rounded-full font-bold ${normalTagClass}">
+                ${diffNormalDays <= 0 ? "มาถึงแล้ว" : `อีก ${diffNormalDays} วัน`}
+              </span>
+            </div>
+
+            <div class="flex justify-between items-center bg-slate-50 p-2 rounded-xl">
+              <div>
+                <p class="text-slate-400 text-[10px] font-medium">วันของมาถึง (ล่าช้า +${ltDelay} วัน)</p>
+                <p class="font-bold text-slate-700">${formatDateThai(arrivalDelayDate)}</p>
+              </div>
+              <span class="text-[10px] px-2 py-1 rounded-full font-bold ${delayTagClass}">
+                ${diffDelayDays <= 0 ? "มาถึงแล้ว" : `อีก ${diffDelayDays} วัน`}
+              </span>
+            </div>
+          </div>
+
+          <div class="pt-1 border-t border-slate-50 flex flex-col">
+            <span class="text-[11px] text-slate-400">ของปัจจุบันจะหมดใน: <strong class="text-slate-700">${daysToOut} วัน</strong></span>
+            ${warningHTML}
+          </div>
+
+          <!-- ปุ่มรับสินค้าเข้าคลัง -->
+          <button onclick="receiveShipment(${item.id})" class="w-full mt-2 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center space-x-1.5">
+            <i class="fa-solid fa-circle-check text-sm"></i>
+            <span>กดรับของเข้าคลัง (+สต็อกหลัก)</span>
+          </button>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function receiveShipment(id) {
+      const shipment = appData.shipments.find(item => item.id === id);
+      if(!shipment) return;
+
+      let defaultArrivalDate = new Date().toISOString().split('T')[0];
+      if (appData.useTestDate && appData.testDate) {
+        defaultArrivalDate = appData.testDate;
+      }
+
+      const inputArrivalDate = prompt("ระบุวันที่ได้รับสินค้าเข้าคลังจริง (รูปแบบ ปปปป-ดด-วว):", defaultArrivalDate);
+      if (inputArrivalDate === null) return; 
+
+      const arrivalDateObj = new Date(inputArrivalDate);
+      if (isNaN(arrivalDateObj.getTime())) {
+        alert("กรอกวันที่ไม่ถูกต้อง! กรุณากรอกในรูปแบบ เช่น 2026-05-29");
+        return;
+      }
+
+      const actualTransitDays = getDaysDiff(shipment.closeDate, inputArrivalDate);
+
+      appData.currentStock = (parseInt(appData.currentStock) || 0) + shipment.qty;
+
+      const newHistoryLog = {
+        id: Date.now(),
+        closeDate: shipment.closeDate,
+        receivedDate: inputArrivalDate,
+        qty: shipment.qty,
+        actualDays: actualTransitDays
+      };
+      
+      appData.receivedHistory = appData.receivedHistory || [];
+      appData.receivedHistory.push(newHistoryLog);
+      appData.shipments = appData.shipments.filter(item => item.id !== id);
+
+      saveData();
+      renderAll();
+      alert(`ทำรายการสำเร็จ!\n📦 สต็อกผ้าไมโครไฟเบอร์เพิ่มขึ้น: +${shipment.qty.toLocaleString()} ผืน\n⏱️ เวลาเดินทางจริง: ${actualTransitDays} วัน (นับจากวันที่ปิดตู้)`);
+    }
+
+    function renderReceivedHistory() {
+      const container = document.getElementById('received-history-container');
+      container.innerHTML = "";
+
+      const history = appData.receivedHistory || [];
+      if(history.length === 0) {
+        container.innerHTML = "<p class='text-sm text-slate-400 text-center py-8'><i class='fa-solid fa-folder-open block text-2xl mb-2 opacity-55'></i>ยังไม่มีประวัติการกดรับของเข้าคลังสำเร็จ</p>";
+        return;
+      }
+
+      const reversed = [...history].reverse();
+
+      reversed.forEach(item => {
+        const row = document.createElement('div');
+        row.className = "p-4 border border-slate-100 rounded-2xl bg-emerald-50/30 text-xs flex justify-between items-center card-shadow";
+        row.innerHTML = `
+          <div>
+            <p class="font-bold text-emerald-800 text-sm">รับแล้ว +${item.qty.toLocaleString()} ผืน</p>
+            <p class="text-[10px] text-slate-500 mt-2">
+              <span class="inline-block bg-slate-200/80 px-2 py-0.5 rounded text-slate-700">ปิดตู้: ${formatDateThai(item.closeDate)}</span>
+              <span class="mx-1 text-slate-400">➔</span>
+              <span class="inline-block bg-emerald-100 px-2 py-0.5 rounded text-emerald-700">รับของ: ${formatDateThai(item.receivedDate)}</span>
+            </p>
+          </div>
+          <div class="text-right ml-2">
+            <span class="bg-indigo-100 text-indigo-900 font-extrabold px-2.5 py-1.5 rounded-xl text-xs block whitespace-nowrap">
+              เดินทาง ${item.actualDays} วัน
+            </span>
+          </div>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function clearReceivedHistory() {
+      if(confirm("คุณต้องการล้างประวัติการนำเข้าของที่มาถึงไทยทั้งหมดใช่หรือไม่?")) {
+        appData.receivedHistory = [];
+        saveData();
+        renderAll();
+      }
+    }
+
+    // ฟังก์ชันกลุ่มข้อมูลยอดขายแยกรายเดือน + กราฟเส้นและ Accordion
+    function renderSalesList() {
+      const container = document.getElementById('sales-monthly-accordion-container');
+      container.innerHTML = "";
+
+      if (appData.salesLogs.length === 0) {
+        container.innerHTML = "<p class='text-sm text-slate-400 text-center py-8'><i class='fa-solid fa-chart-bar block text-2xl mb-2 opacity-55'></i>ยังไม่มีประวัติการขายสินค้าในระบบ</p>";
+        return;
+      }
+
+      // 1. แยกกลุ่มยอดขายตามเดือน (คีย์: YYYY-MM)
+      const monthlyGroups = {};
+      appData.salesLogs.forEach(log => {
+        const monthKey = log.date.substring(0, 7); 
+        if (!monthlyGroups[monthKey]) {
+          monthlyGroups[monthKey] = [];
+        }
+        monthlyGroups[monthKey].push(log);
+      });
+
+      // 2. เรียงลำดับเดือนจากล่าสุดลงไปอดีต
+      const sortedMonthKeys = Object.keys(monthlyGroups).sort().reverse();
+
+      sortedMonthKeys.forEach(monthKey => {
+        const logs = monthlyGroups[monthKey];
+        
+        let totalSales = 0;
+        logs.forEach(l => totalSales += parseInt(l.qty) || 0);
+        const logDaysCount = logs.length;
+        const avgDailySales = logDaysCount > 0 ? Math.round(totalSales / logDaysCount) : 0;
+
+        const sortedLogsAsc = [...logs].sort((a,b) => new Date(a.date) - new Date(b.date));
+        const monthTitle = getThaiMonthName(monthKey);
+
+        const accordionId = `accordion-${monthKey}`;
+        const panelId = `panel-${monthKey}`;
+        const chartId = `chart-${monthKey}`;
+
+        const accordionDiv = document.createElement('div');
+        accordionDiv.className = "border border-slate-100 rounded-3xl overflow-hidden card-shadow bg-white";
+        accordionDiv.innerHTML = `
+          <!-- แถบหัวข้อกดพับ/ยืด (Accordion Header) -->
+          <button onclick="toggleMonthAccordion('${monthKey}')" id="${accordionId}" class="w-full text-left p-4 bg-slate-50/50 hover:bg-slate-100/70 transition flex justify-between items-center border-b border-slate-50">
+            <div>
+              <p class="font-bold text-slate-800 text-sm flex items-center">
+                <i class="fa-solid fa-calendar-days text-pink-500 mr-2"></i> ${monthTitle}
+              </p>
+              <p class="text-[11px] text-slate-400 mt-1">
+                ขายรวม: <strong class="text-slate-600">${totalSales.toLocaleString()}</strong> ผืน 
+                <span class="mx-1">•</span> 
+                เฉลี่ยรายวัน: <strong class="text-emerald-600">${avgDailySales.toLocaleString()}</strong> ผืน/วัน
+              </p>
+            </div>
+            <span id="arrow-${monthKey}" class="text-slate-400 transition-transform duration-300"><i class="fa-solid fa-chevron-down"></i></span>
+          </button>
+
+          <!-- บอร์ดข้อมูลและกราฟ (รายละเอียดซ่อนอยู่เริ่มต้น) -->
+          <div id="${panelId}" class="hidden p-4 space-y-4 bg-white">
+            
+            <!-- พื้นที่แสดงกราฟ Chart.js -->
+            <div>
+              <p class="text-[11px] font-bold text-slate-400 mb-2"><i class="fa-solid fa-chart-line text-pink-500 mr-1"></i> กราฟแนวโน้มยอดขายรายวัน</p>
+              <div class="relative w-full h-48 bg-slate-50/50 rounded-2xl p-2 border border-slate-100">
+                <canvas id="${chartId}"></canvas>
+              </div>
+            </div>
+
+            <!-- รายละเอียดประวัติการบันทึกแยกรายวัน และปุ่มลบประวัติของเดือนนี้ -->
+            <div>
+              <div class="flex justify-between items-center mb-2">
+                <p class="text-[11px] font-bold text-slate-400"><i class="fa-solid fa-list-ul mr-1"></i> บันทึกรายวัน</p>
+                <!-- ปุ่มล้างประวัติเฉพาะเดือนนี้ -->
+                <button onclick="clearMonthSales('${monthKey}')" class="text-rose-500 hover:text-rose-700 text-[10px] font-semibold flex items-center"><i class="fa-solid fa-trash-can mr-1"></i> ล้างประวัติเดือนนี้</button>
+              </div>
+              <div class="space-y-2 max-h-48 overflow-y-auto scrollbar-none border-t pt-2">
+                ${sortedLogsAsc.map(log => `
+                  <div class="flex justify-between items-center p-2 rounded-xl bg-slate-50/40 text-[11px]">
+                    <div>
+                      <span class="font-bold text-slate-700">${formatDateThai(log.date)}</span>
+                      <span class="mx-1.5 text-slate-300">|</span>
+                      <span class="text-slate-500">ขายได้: <strong>${log.qty.toLocaleString()}</strong> ผืน</span>
+                    </div>
+                    <div class="flex space-x-2">
+                      <!-- ปุ่มแก้ไขสถิติขายรายวัน -->
+                      <button onclick="editSaleLog(${log.id})" class="text-indigo-400 hover:text-indigo-600 p-1" title="แก้ไขยอดขาย"><i class="fa-solid fa-pen-to-square"></i></button>
+                      <button onclick="deleteSaleLog(${log.id})" class="text-slate-300 hover:text-rose-500 p-1" title="ลบ"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+
+          </div>
+        `;
+
+        container.appendChild(accordionDiv);
+      });
+    }
+
+    // ฟังก์ชันพับ/เปิด Accordion รายเดือน
+    function toggleMonthAccordion(monthKey) {
+      const panel = document.getElementById(`panel-${monthKey}`);
+      const arrow = document.getElementById(`arrow-${monthKey}`);
+      
+      const isExpanded = !panel.classList.contains('hidden');
+
+      if (isExpanded) {
+        panel.classList.add('hidden');
+        arrow.style.transform = 'rotate(0deg)';
+      } else {
+        panel.classList.remove('hidden');
+        arrow.style.transform = 'rotate(180deg)';
+        
+        initMonthlyChart(monthKey);
+      }
+    }
+
+    // ฟังก์ชันวาดกราฟสถิติรายวันด้วย Chart.js
+    function initMonthlyChart(monthKey) {
+      const logs = appData.salesLogs.filter(log => log.date.substring(0, 7) === monthKey);
+      const sortedLogs = [...logs].sort((a,b) => new Date(a.date) - new Date(b.date));
+
+      const labels = sortedLogs.map(l => {
+        const parts = l.date.split('-');
+        return `${parts[2]}`; 
+      });
+      const dataValues = sortedLogs.map(l => l.qty);
+
+      if (window.activeCharts[monthKey]) {
+        window.activeCharts[monthKey].destroy();
+      }
+
+      const canvasCtx = document.getElementById(`chart-${monthKey}`).getContext('2d');
+      window.activeCharts[monthKey] = new Chart(canvasCtx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'ยอดขาย (ผืน)',
+            data: dataValues,
+            borderColor: '#ec4899', 
+            backgroundColor: 'rgba(236, 72, 153, 0.08)',
+            borderWidth: 2,
+            tension: 0.25, 
+            fill: true,
+            pointBackgroundColor: '#ec4899',
+            pointRadius: 2.5,
+            pointHoverRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: '#f1f5f9' },
+              ticks: { font: { family: 'Kanit', size: 9 }, color: '#94a3b8' }
+            },
+            x: {
+              grid: { display: false },
+              ticks: { font: { family: 'Kanit', size: 9 }, color: '#94a3b8' }
+            }
+          }
+        }
+      });
+    }
+
+    // ฟังก์ชันแก้ไขยอดขายรายวันที่เคยบันทึก
+    function editSaleLog(id) {
+      const log = appData.salesLogs.find(l => l.id === id);
+      if(!log) return;
+
+      const newQtyStr = prompt(`แก้ไขจำนวนผืนที่ขายได้ของวันที่ ${formatDateThai(log.date)}:`, log.qty);
+      if (newQtyStr === null) return; 
+
+      const newQty = parseInt(newQtyStr);
+      if (isNaN(newQty) || newQty < 0) {
+        alert("กรุณากรอกตัวเลขจำนวนผืนที่ถูกต้องด้วยครับ");
+        return;
+      }
+
+      if (log.deducted) {
+        const diff = newQty - log.qty;
+        appData.currentStock = Math.max(0, appData.currentStock - diff);
+      }
+
+      log.qty = newQty;
+      saveData();
+      renderAll();
+
+      const monthKey = log.date.substring(0, 7);
+      initMonthlyChart(monthKey);
+      alert("แก้ไขสถิติและคำนวณปรับยอดสต็อกให้เรียบร้อยแล้ว!");
+    }
+
+    // ฟังก์ชันล้างข้อมูลประวัติยอดขายเฉพาะของแต่ละเดือนอย่างปลอดภัย
+    function clearMonthSales(monthKey) {
+      const monthTitle = getThaiMonthName(monthKey);
+      if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบประวัติยอดขายทั้งหมดของเดือน "${monthTitle}"?\n(ประวัติจะถูกลบถาวรและไม่สามารถกู้คืนได้ และจะไม่คำนวณคืนสต็อกที่เคยหักไปแล้ว)`)) {
+        
+        if (window.activeCharts[monthKey]) {
+          window.activeCharts[monthKey].destroy();
+          delete window.activeCharts[monthKey];
+        }
+
+        appData.salesLogs = appData.salesLogs.filter(log => !log.date.startsWith(monthKey));
+        saveData();
+        renderAll();
+        alert(`ล้างข้อมูลสถิติของเดือน ${monthTitle} เรียบร้อยแล้ว`);
+      }
+    }
+
+    // แปลง YYYY-MM เป็นชื่อเดือนภาษาไทย และ ค.ศ. (คริสต์ศักราช) ตามที่อัปเดต
+    function getThaiMonthName(monthKey) {
+      const months = [
+        "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+        "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+      ];
+      const parts = monthKey.split('-');
+      const yearCE = parseInt(parts[0]);
+      const monthIndex = parseInt(parts[1]) - 1;
+      return `${months[monthIndex]} ค.ศ. ${yearCE}`;
+    }
+
+    function openEditModal(id) {
+      const shipment = appData.shipments.find(item => item.id === id);
+      if(shipment) {
+        document.getElementById('edit-ship-id').value = shipment.id;
+        document.getElementById('edit-ship-close-date').value = shipment.closeDate;
+        document.getElementById('edit-ship-qty').value = shipment.qty;
+        document.getElementById('edit-modal').classList.remove('hidden');
+      }
+    }
+
+    function closeEditModal() {
+      document.getElementById('edit-modal').classList.add('hidden');
+    }
+
+    function saveEditedShipment(e) {
+      e.preventDefault();
+      const id = parseInt(document.getElementById('edit-ship-id').value);
+      const closeDate = document.getElementById('edit-ship-close-date').value;
+      const qty = parseInt(document.getElementById('edit-ship-qty').value) || 0;
+
+      const idx = appData.shipments.findIndex(item => item.id === id);
+      if(idx !== -1) {
+        appData.shipments[idx].closeDate = closeDate;
+        appData.shipments[idx].qty = qty;
+        appData.shipments.sort((a,b) => new Date(a.closeDate) - new Date(b.closeDate));
+
+        saveData();
+        renderAll();
+        closeEditModal();
+        alert("อัปเดตข้อมูลเดินทางเสร็จสมบูรณ์!");
+      }
+    }
+
+    function formatDateThai(dateStr) {
+      if(!dateStr) return "-";
+      const parts = dateStr.split('-');
+      if(parts.length < 3) return dateStr;
+      return `${parts[2]}-${parts[1]}-${parts[0].substring(2)}`;
+    }
+
+    function updateSettings() {
+      appData.salesNormal = parseInt(document.getElementById('setting-sales-normal').value) || 0;
+      appData.salesBest = parseInt(document.getElementById('setting-sales-best').value) || 0;
+      appData.ltNormal = parseInt(document.getElementById('setting-lt-normal').value) || 0;
+      appData.ltDelay = parseInt(document.getElementById('setting-lt-delay').value) || 0;
+      appData.testDate = document.getElementById('setting-test-date').value;
+      appData.useTestDate = document.getElementById('setting-use-test-date').checked;
+      
+      saveData();
+      renderAll();
+    }
+
+    function editCurrentStock() {
+      const current = appData.currentStock;
+      const val = prompt("ป้อนจำนวนผ้าในสต็อกคลังจริง ณ วันนี้ (ผืน):", current);
+      if(val !== null && !isNaN(val)) {
+        appData.currentStock = parseInt(val) || 0;
+        saveData();
+        renderAll();
+      }
+    }
+
+    function addShipment(e) {
+      e.preventDefault();
+      const closeDate = document.getElementById('ship-close-date').value;
+      const qty = parseInt(document.getElementById('ship-qty').value) || 0;
+
+      const newShip = {
+        id: Date.now(),
+        closeDate,
+        qty
+      };
+
+      appData.shipments.push(newShip);
+      appData.shipments.sort((a,b) => new Date(a.closeDate) - new Date(b.closeDate));
+
+      saveData();
+      renderAll();
+      
+      document.getElementById('ship-qty').value = "";
+      alert("เพิ่มรายการส่งของชุดใหม่เรียบร้อย!");
+    }
+
+    function deleteShipment(id) {
+      if(confirm("ต้องการลบรายการเดินทางนี้ใช่หรือไม่?")) {
+        appData.shipments = appData.shipments.filter(item => item.id !== id);
+        saveData();
+        renderAll();
+      }
+    }
+
+    function addSaleLog(e) {
+      e.preventDefault();
+      const date = document.getElementById('sale-date').value;
+      const qty = parseInt(document.getElementById('sale-qty').value) || 0;
+      const isDeduct = document.getElementById('deduct-stock').checked;
+
+      const newLog = {
+        id: Date.now(),
+        date,
+        qty,
+        deducted: isDeduct
+      };
+
+      appData.salesLogs.push(newLog);
+
+      if(isDeduct) {
+        appData.currentStock = Math.max(0, appData.currentStock - qty);
+      }
+
+      saveData();
+      renderAll();
+
+      document.getElementById('sale-qty').value = "";
+      alert("เพิ่มยอดขายประจำวันและอัปเดตสต็อกเรียบร้อยแล้ว!");
+    }
+
+    function deleteSaleLog(id) {
+      if(confirm("ต้องการลบข้อมูลสถิติการขายนี้ใช่หรือไม่?")) {
+        appData.salesLogs = appData.salesLogs.filter(item => item.id !== id);
+        saveData();
+        renderAll();
+      }
+    }
+
+    function resetToDemoData() {
+      if(confirm("ต้องการล้างข้อมูลเพื่อเปลี่ยนเป็นข้อมูลเริ่มต้น (รวมยอดสถิติขายต้นเดือนพฤษภาคม)")) {
+        appData = JSON.parse(JSON.stringify(defaultData));
+        
+        document.getElementById('setting-sales-normal').value = appData.salesNormal;
+        document.getElementById('setting-sales-best').value = appData.salesBest;
+        document.getElementById('setting-lt-normal').value = appData.ltNormal;
+        document.getElementById('setting-lt-delay').value = appData.ltDelay;
+        document.getElementById('setting-test-date').value = appData.testDate;
+        document.getElementById('setting-use-test-date').checked = appData.useTestDate;
+
+        saveData();
+        renderAll();
+        alert("คืนค่าข้อมูลสถิติ ROP สำเร็จ!");
+      }
+    }
+  </script>
+</body>
+</html>
