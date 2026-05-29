@@ -12,9 +12,9 @@
   <!-- Chart.js CDN for Mobile-responsive Line Chart -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <!-- Firebase SDKs (Compat version for offline-ready direct browser runs) -->
+  <!-- Firebase SDKs (Compat version using Cloud Firestore) -->
   <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-analytics-compat.js"></script>
   
   <style>
@@ -41,9 +41,9 @@
     <h1 class="text-2xl font-bold tracking-wide"><i class="fa-solid fa-layer-group mr-2"></i>ระบบคำนวณสั่งผ้าไมโครไฟเบอร์</h1>
     <div class="flex items-center justify-center mt-1 space-x-1">
       <span class="text-xs opacity-90">วางแผน ROP และจัดการสต็อกนำเข้าจากจีน</span>
-      <!-- จุดแจ้งสถานะระบบคลาวด์ Firebase -->
+      <!-- จุดแจ้งสถานะระบบคลาวด์ Firestore -->
       <span id="cloud-status" class="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-500/40 text-slate-200">
-        <i class="fa-solid fa-spinner animate-spin"></i> กำลังเชื่อมต่อคลาวด์...
+        <i class="fa-solid fa-spinner animate-spin"></i> กำลังเชื่อมต่อ Firestore...
       </span>
     </div>
   </div>
@@ -223,7 +223,7 @@
         </form>
       </div>
 
-      <!-- กลุ่มรายงานและประวัติการขายประจำเดือน (พับ/ยืดและกราฟเส้น) -->
+      <!-- กลุ่มรายงานและประวัติการขายประจำเดือน -->
       <div class="bg-white rounded-3xl p-6 card-shadow border-t-8 border-pink-400">
         <div class="mb-4">
           <h3 class="font-bold text-slate-700 text-lg flex items-center">
@@ -284,31 +284,6 @@
 
   </div>
 
-  <!-- ==================== MODAL: EDIT SHIPMENT ==================== -->
-  <div id="edit-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
-    <div class="bg-white rounded-3xl w-full max-w-sm p-6 card-shadow border-t-8 border-indigo-500">
-      <div class="flex justify-between items-center mb-4">
-        <h3 class="font-bold text-slate-700 text-lg"><i class="fa-solid fa-edit mr-1 text-indigo-500"></i> แก้ไขข้อมูลนำเข้า</h3>
-        <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-circle-xmark"></i></button>
-      </div>
-      <form id="edit-shipment-form" class="space-y-4" onsubmit="saveEditedShipment(event)">
-        <input type="hidden" id="edit-ship-id">
-        <div>
-          <label class="block text-xs text-slate-500 mb-1">วันที่ปิดตู้</label>
-          <input type="date" id="edit-ship-close-date" required class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
-        </div>
-        <div>
-          <label class="block text-xs text-slate-500 mb-1">จำนวนที่สั่ง (ผืน)</label>
-          <input type="number" id="edit-ship-qty" required class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
-        </div>
-        <div class="flex space-x-3 pt-2">
-          <button type="button" onclick="closeEditModal()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl transition-all">ยกเลิก</button>
-          <button type="submit" class="flex-1 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl transition-all shadow-md">บันทึกแก้ไข</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
   <!-- Bottom Nav Bar for Mobile -->
   <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-100 py-2 flex justify-around items-center shadow-lg z-50">
     <button onclick="switchTab('dashboard')" id="nav-dashboard" class="flex flex-col items-center text-teal-500">
@@ -330,7 +305,6 @@
   </div>
 
   <script>
-    // ชุดข้อมูลยอดขายที่บันทึกไว้ตั้งแต่ต้นเดือนพฤษภาคม 2026
     const preseededSales = [
       { id: 101, date: "2026-05-01", qty: 1626, deducted: false },
       { id: 102, date: "2026-05-02", qty: 2090, deducted: false },
@@ -383,9 +357,9 @@
     let appData = JSON.parse(localStorage.getItem('microfiber_rop_data_v4')) || defaultData;
     window.activeCharts = {};
 
-    // -------------------------------------------------------------
-    // INTEGRATE FIREBASE REALTIME DATABASE (COMPAT VERSION)
-    // -------------------------------------------------------------
+    // -----------------------------------------------------------------
+    // กำหนดค่าคอนฟิก Firebase เข้ากับระบบ Cloud Firestore ของโครงการ l-boss
+    // -----------------------------------------------------------------
     const firebaseConfig = {
       apiKey: "AIzaSyCXSWM419rJYrzi-ICFj9HJxWLiPICbJHc",
       authDomain: "l-boss.firebaseapp.com",
@@ -396,65 +370,64 @@
       measurementId: "G-R3MST7FWGY"
     };
 
-    let database = null;
-    let dbRef = null;
+    let db = null;
+    let docRef = null;
 
     try {
       firebase.initializeApp(firebaseConfig);
-      database = firebase.database();
-      dbRef = database.ref('microfiber_rop_data');
+      // เปลี่ยนจากระบบ Realtime Database มาใช้งาน Cloud Firestore
+      db = firebase.firestore();
+      
+      // อ้างอิงเอกสารหลักใน Firestore: microfiberRop (Collection) -> mainState (Document)
+      docRef = db.collection('microfiberRop').doc('mainState');
 
-      // ตรวจสอบสถานะการเชื่อมต่อ และโหลดข้อมูลครั้งแรกจากคลาวด์
-      dbRef.once('value').then((snapshot) => {
-        const cloudData = snapshot.val();
-        if (cloudData) {
-          appData = cloudData;
+      // ตรวจสอบและดึงข้อมูลครั้งแรกจากคลาวด์ Firestore
+      docRef.get().then((doc) => {
+        if (doc.exists) {
+          appData = doc.data();
         } else {
-          // หากบนคลาวด์ว่างเปล่า ให้ส่งค่าตั้งต้นขึ้นไป
-          dbRef.set(appData);
+          // หากยังไม่มีโฟลเดอร์ microfiberRop ใน Cloud Firestore ระบบจะอัปโหลดค่าตั้งต้นชุดแรกขึ้นไปให้ทันที
+          docRef.set(appData);
         }
         updateCloudStatus(true);
         renderAll();
       }).catch((err) => {
-        console.warn("ไม่สามารถดึงข้อมูลจาก Firebase ได้ชั่วคราว, กำลังรันโหมดเครื่องเครื่อง:", err);
+        console.warn("ไม่สามารถดึงข้อมูลจาก Cloud Firestore ได้ชั่วคราว, กำลังรันโหมดออฟไลน์:", err);
         updateCloudStatus(false);
         renderAll();
       });
 
-      // ซิงก์ข้อมูลแบบเรียลไทม์หากเปิดใช้งานสองอุปกรณ์พร้อมกัน
-      dbRef.on('value', (snapshot) => {
-        const cloudData = snapshot.val();
-        if (cloudData) {
-          appData = cloudData;
+      // ซิงก์ข้อมูลแบบเรียลไทม์ระหว่างอุปกรณ์ (Realtime Snapshots)
+      docRef.onSnapshot((doc) => {
+        if (doc.exists) {
+          appData = doc.data();
           renderAll();
         }
       });
 
     } catch (e) {
-      console.error("การเริ่มต้นใช้งาน Firebase ผิดพลาด:", e);
+      console.error("การเริ่มต้นใช้งาน Cloud Firestore มีข้อผิดพลาด:", e);
       updateCloudStatus(false);
     }
 
-    // ฟังก์ชันเปลี่ยนสถานะคลาวด์สีด้านบนสุดของแอป
     function updateCloudStatus(isOnline) {
       const statusSpan = document.getElementById('cloud-status');
       if (isOnline) {
         statusSpan.className = "text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/40 text-emerald-100";
-        statusSpan.innerHTML = `<i class="fa-solid fa-cloud"></i> เชื่อมต่อคลาวด์แล้ว`;
+        statusSpan.innerHTML = `<i class="fa-solid fa-cloud"></i> เชื่อมต่อ Cloud Firestore แล้ว`;
       } else {
         statusSpan.className = "text-[9px] px-1.5 py-0.5 rounded-full bg-rose-500/40 text-rose-100";
         statusSpan.innerHTML = `<i class="fa-solid fa-cloud-slash"></i> ทำงานออฟไลน์ (เซฟในเครื่อง)`;
       }
     }
 
-    // ฟังก์ชันบันทึกข้อมูลแบบ Hybrid (ลงเครื่องด้วย + ยิงขึ้นคลาวด์ทันที)
     function saveData() {
       localStorage.setItem('microfiber_rop_data_v4', JSON.stringify(appData));
-      if (dbRef) {
-        dbRef.set(appData).then(() => {
+      if (docRef) {
+        docRef.set(appData).then(() => {
           updateCloudStatus(true);
         }).catch((err) => {
-          console.warn("การอัปโหลดข้อมูลลงคลาวด์ขัดข้องชั่วคราว:", err);
+          console.warn("การบันทึกข้อมูลลง Cloud Firestore ขัดข้องชั่วคราว:", err);
           updateCloudStatus(false);
         });
       }
@@ -723,7 +696,6 @@
       }
     }
 
-    // ฟังก์ชันกลุ่มข้อมูลยอดขายแยกรายเดือน + กราฟเส้นและ Accordion
     function renderSalesList() {
       const container = document.getElementById('sales-monthly-accordion-container');
       container.innerHTML = "";
@@ -733,7 +705,6 @@
         return;
       }
 
-      // 1. แยกกลุ่มยอดขายตามเดือน (คีย์: YYYY-MM)
       const monthlyGroups = {};
       appData.salesLogs.forEach(log => {
         const monthKey = log.date.substring(0, 7); 
@@ -743,7 +714,6 @@
         monthlyGroups[monthKey].push(log);
       });
 
-      // 2. เรียงลำดับเดือนจากล่าสุดลงไปอดีต
       const sortedMonthKeys = Object.keys(monthlyGroups).sort().reverse();
 
       sortedMonthKeys.forEach(monthKey => {
@@ -764,7 +734,6 @@
         const accordionDiv = document.createElement('div');
         accordionDiv.className = "border border-slate-100 rounded-3xl overflow-hidden card-shadow bg-white";
         accordionDiv.innerHTML = `
-          <!-- แถบหัวข้อกดพับ/ยืด (Accordion Header) -->
           <button onclick="toggleMonthAccordion('${monthKey}')" id="${accordionId}" class="w-full text-left p-4 bg-slate-50/50 hover:bg-slate-100/70 transition flex justify-between items-center border-b border-slate-50">
             <div>
               <p class="font-bold text-slate-800 text-sm flex items-center">
@@ -779,10 +748,7 @@
             <span id="arrow-${monthKey}" class="text-slate-400 transition-transform duration-300"><i class="fa-solid fa-chevron-down"></i></span>
           </button>
 
-          <!-- บอร์ดข้อมูลและกราฟ (รายละเอียดซ่อนอยู่เริ่มต้น) -->
           <div id="${panelId}" class="hidden p-4 space-y-4 bg-white">
-            
-            <!-- พื้นที่แสดงกราฟ Chart.js -->
             <div>
               <p class="text-[11px] font-bold text-slate-400 mb-2"><i class="fa-solid fa-chart-line text-pink-500 mr-1"></i> กราฟแนวโน้มยอดขายรายวัน</p>
               <div class="relative w-full h-48 bg-slate-50/50 rounded-2xl p-2 border border-slate-100">
@@ -790,11 +756,9 @@
               </div>
             </div>
 
-            <!-- รายละเอียดประวัติการบันทึกแยกรายวัน และปุ่มลบประวัติของเดือนนี้ -->
             <div>
               <div class="flex justify-between items-center mb-2">
                 <p class="text-[11px] font-bold text-slate-400"><i class="fa-solid fa-list-ul mr-1"></i> บันทึกรายวัน</p>
-                <!-- ปุ่มล้างประวัติเฉพาะเดือนนี้ -->
                 <button onclick="clearMonthSales('${monthKey}')" class="text-rose-500 hover:text-rose-700 text-[10px] font-semibold flex items-center"><i class="fa-solid fa-trash-can mr-1"></i> ล้างประวัติเดือนนี้</button>
               </div>
               <div class="space-y-2 max-h-48 overflow-y-auto scrollbar-none border-t pt-2">
@@ -806,7 +770,6 @@
                       <span class="text-slate-500">ขายได้: <strong>${log.qty.toLocaleString()}</strong> ผืน</span>
                     </div>
                     <div class="flex space-x-2">
-                      <!-- ปุ่มแก้ไขสถิติขายรายวัน -->
                       <button onclick="editSaleLog(${log.id})" class="text-indigo-400 hover:text-indigo-600 p-1" title="แก้ไขยอดขาย"><i class="fa-solid fa-pen-to-square"></i></button>
                       <button onclick="deleteSaleLog(${log.id})" class="text-slate-300 hover:text-rose-500 p-1" title="ลบ"><i class="fa-solid fa-trash-can"></i></button>
                     </div>
@@ -814,7 +777,6 @@
                 `).join('')}
               </div>
             </div>
-
           </div>
         `;
 
@@ -822,7 +784,6 @@
       });
     }
 
-    // ฟังก์ชันพับ/เปิด Accordion รายเดือน
     function toggleMonthAccordion(monthKey) {
       const panel = document.getElementById(`panel-${monthKey}`);
       const arrow = document.getElementById(`arrow-${monthKey}`);
@@ -840,7 +801,6 @@
       }
     }
 
-    // ฟังก์ชันวาดกราฟสถิติรายวันด้วย Chart.js
     function initMonthlyChart(monthKey) {
       const logs = appData.salesLogs.filter(log => log.date.substring(0, 7) === monthKey);
       const sortedLogs = [...logs].sort((a,b) => new Date(a.date) - new Date(b.date));
@@ -894,7 +854,6 @@
       });
     }
 
-    // ฟังก์ชันแก้ไขยอดขายรายวันที่เคยบันทึก
     function editSaleLog(id) {
       const log = appData.salesLogs.find(l => l.id === id);
       if(!log) return;
@@ -922,7 +881,6 @@
       alert("แก้ไขสถิติและคำนวณปรับยอดสต็อกให้เรียบร้อยแล้ว!");
     }
 
-    // ฟังก์ชันล้างข้อมูลประวัติยอดขายเฉพาะของแต่ละเดือนอย่างปลอดภัย
     function clearMonthSales(monthKey) {
       const monthTitle = getThaiMonthName(monthKey);
       if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบประวัติยอดขายทั้งหมดของเดือน "${monthTitle}"?\n(ประวัติจะถูกลบถาวรและไม่สามารถกู้คืนได้ และจะไม่คำนวณคืนสต็อกที่เคยหักไปแล้ว)`)) {
@@ -939,7 +897,6 @@
       }
     }
 
-    // แปลง YYYY-MM เป็นชื่อเดือนภาษาไทย และ ค.ศ. (คริสต์ศักราช) ตามที่อัปเดต
     function getThaiMonthName(monthKey) {
       const months = [
         "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
@@ -971,7 +928,7 @@
       const closeDate = document.getElementById('edit-ship-close-date').value;
       const qty = parseInt(document.getElementById('edit-ship-qty').value) || 0;
 
-      const idx = appData.shipments.findIndex(item => item.id === id);
+      const idx = appData.shipments.findIndex(item => item.id !== id);
       if(idx !== -1) {
         appData.shipments[idx].closeDate = closeDate;
         appData.shipments[idx].qty = qty;
