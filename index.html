@@ -284,6 +284,32 @@
 
   </div>
 
+  <!-- ==================== MODAL: EDIT SHIPMENT ==================== -->
+  <div id="edit-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-white rounded-3xl w-full max-w-sm p-6 card-shadow border-t-8 border-indigo-500">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="font-bold text-slate-700 text-lg"><i class="fa-solid fa-edit mr-1 text-indigo-500"></i> แก้ไขข้อมูลนำเข้า</h3>
+        <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-circle-xmark"></i></button>
+      </div>
+      <form id="edit-shipment-form" class="space-y-4" onsubmit="saveEditedShipment(event)">
+        <!-- เปลี่ยนคีย์จากเก็บไอดีเป็นเก็บตำแหน่งอาร์เรย์ (Index) เพื่อการเรียกใช้ที่แม่นยำ 100% -->
+        <input type="hidden" id="edit-ship-index">
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">วันที่ปิดตู้</label>
+          <input type="date" id="edit-ship-close-date" required class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">จำนวนที่สั่ง (ผืน)</label>
+          <input type="number" id="edit-ship-qty" required class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+        </div>
+        <div class="flex space-x-3 pt-2">
+          <button type="button" onclick="closeEditModal()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl transition-all">ยกเลิก</button>
+          <button type="submit" class="flex-1 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl transition-all shadow-md">บันทึกแก้ไข</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Bottom Nav Bar for Mobile -->
   <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-100 py-2 flex justify-around items-center shadow-lg z-50">
     <button onclick="switchTab('dashboard')" id="nav-dashboard" class="flex flex-col items-center text-teal-500">
@@ -375,18 +401,13 @@
 
     try {
       firebase.initializeApp(firebaseConfig);
-      // เปลี่ยนจากระบบ Realtime Database มาใช้งาน Cloud Firestore
       db = firebase.firestore();
-      
-      // อ้างอิงเอกสารหลักใน Firestore: microfiberRop (Collection) -> mainState (Document)
       docRef = db.collection('microfiberRop').doc('mainState');
 
-      // ตรวจสอบและดึงข้อมูลครั้งแรกจากคลาวด์ Firestore
       docRef.get().then((doc) => {
         if (doc.exists) {
           appData = doc.data();
         } else {
-          // หากยังไม่มีโฟลเดอร์ microfiberRop ใน Cloud Firestore ระบบจะอัปโหลดค่าตั้งต้นชุดแรกขึ้นไปให้ทันที
           docRef.set(appData);
         }
         updateCloudStatus(true);
@@ -397,7 +418,6 @@
         renderAll();
       });
 
-      // ซิงก์ข้อมูลแบบเรียลไทม์ระหว่างอุปกรณ์ (Realtime Snapshots)
       docRef.onSnapshot((doc) => {
         if (doc.exists) {
           appData = doc.data();
@@ -533,16 +553,19 @@
       }
     }
 
+    // เรนเดอร์การเดินทาง: ปรับมาใช้ index ของอาร์เรย์ (Array Index) ในการแก้ไขและลบเพื่อแก้ปัญหาปุ่มกดไม่ติดอย่างเด็ดขาด
     function renderShipments(todayStr, salesNormal, ltNormal, ltDelay) {
       const container = document.getElementById('shipment-list-container');
       container.innerHTML = "";
 
-      if(appData.shipments.length === 0) {
+      const shipments = appData.shipments || [];
+
+      if(shipments.length === 0) {
         container.innerHTML = "<p class='text-sm text-slate-400 text-center py-4'>ไม่มีรายการสินค้ากำลังเดินทางในขณะนี้</p>";
         return;
       }
 
-      appData.shipments.forEach(item => {
+      shipments.forEach((item, index) => {
         const arrivalNormalDate = addDays(item.closeDate, ltNormal);
         const arrivalDelayDate = addDays(item.closeDate, ltDelay);
 
@@ -565,13 +588,14 @@
         const card = document.createElement('div');
         card.className = "p-4 border border-slate-100 rounded-2xl bg-white card-shadow flex flex-col space-y-3 relative";
         card.innerHTML = `
-          <div class="absolute top-4 right-4 flex space-x-2">
-            <button onclick="openEditModal(${item.id})" class="text-indigo-400 hover:text-indigo-600 transition p-1"><i class="fa-solid fa-pen-to-square text-base"></i></button>
-            <button onclick="deleteShipment(${item.id})" class="text-slate-300 hover:text-rose-500 transition p-1"><i class="fa-solid fa-trash-can text-base"></i></button>
+          <!-- ตัวควบคุมการกดสัมผัส: ขยาย Touch Target ให้กว้างขึ้น และระบุ z-index ให้ลอยเหนือเลเยอร์อื่น -->
+          <div class="absolute top-4 right-4 flex space-x-1.5 z-20">
+            <button onclick="openEditModal(${index})" class="text-indigo-500 hover:text-indigo-700 transition p-2 bg-indigo-50 hover:bg-indigo-100 rounded-lg cursor-pointer" title="แก้ไข"><i class="fa-solid fa-pen-to-square text-sm"></i></button>
+            <button onclick="deleteShipment(${index})" class="text-rose-500 hover:text-rose-700 transition p-2 bg-rose-50 hover:bg-rose-100 rounded-lg cursor-pointer" title="ลบ"><i class="fa-solid fa-trash-can text-sm"></i></button>
           </div>
 
           <div>
-            <p class="text-sm font-bold text-slate-800 flex items-center">
+            <p class="text-sm font-bold text-slate-800 flex items-center pr-16">
               <span class="bg-indigo-50 text-indigo-600 text-xs px-2 py-0.5 rounded-md mr-2">นำเข้า</span>
               ${item.qty.toLocaleString()} ผืน
             </p>
@@ -605,8 +629,8 @@
             ${warningHTML}
           </div>
 
-          <!-- ปุ่มรับสินค้าเข้าคลัง -->
-          <button onclick="receiveShipment(${item.id})" class="w-full mt-2 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center space-x-1.5">
+          <!-- ปุ่มรับสินค้าเข้าคลัง (สลับมาคุมด้วย Index เพื่อความเสถียรสูงสุด) -->
+          <button onclick="receiveShipment(${index})" class="w-full mt-2 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center space-x-1.5">
             <i class="fa-solid fa-circle-check text-sm"></i>
             <span>กดรับของเข้าคลัง (+สต็อกหลัก)</span>
           </button>
@@ -615,8 +639,52 @@
       });
     }
 
-    function receiveShipment(id) {
-      const shipment = appData.shipments.find(item => item.id === id);
+    // ฟังก์ชันเปิดหน้าต่างแก้ไขด้วย Array Index (ขจัดปัญหาเรื่องประเภท ID ไม่ตรงกันของคลาวด์)
+    function openEditModal(index) {
+      const shipment = appData.shipments[index];
+      if(shipment) {
+        document.getElementById('edit-ship-index').value = index;
+        document.getElementById('edit-ship-close-date').value = shipment.closeDate;
+        document.getElementById('edit-ship-qty').value = shipment.qty;
+        document.getElementById('edit-modal').classList.remove('hidden');
+      }
+    }
+
+    function closeEditModal() {
+      document.getElementById('edit-modal').classList.add('hidden');
+    }
+
+    // บันทึกแก้ไขด้วยตำแหน่ง Array Index
+    function saveEditedShipment(e) {
+      e.preventDefault();
+      const index = parseInt(document.getElementById('edit-ship-index').value);
+      const closeDate = document.getElementById('edit-ship-close-date').value;
+      const qty = parseInt(document.getElementById('edit-ship-qty').value) || 0;
+
+      if(appData.shipments[index] !== undefined) {
+        appData.shipments[index].closeDate = closeDate;
+        appData.shipments[index].qty = qty;
+        appData.shipments.sort((a,b) => new Date(a.closeDate) - new Date(b.closeDate));
+
+        saveData();
+        renderAll();
+        closeEditModal();
+        alert("อัปเดตข้อมูลเดินทางเสร็จสมบูรณ์!");
+      }
+    }
+
+    // กดลบด้วยตำแหน่ง Array Index
+    function deleteShipment(index) {
+      if(confirm("ต้องการลบรายการเดินทางนี้ใช่หรือไม่?")) {
+        appData.shipments.splice(index, 1);
+        saveData();
+        renderAll();
+      }
+    }
+
+    // กดรับของด้วยตำแหน่ง Array Index
+    function receiveShipment(index) {
+      const shipment = appData.shipments[index];
       if(!shipment) return;
 
       let defaultArrivalDate = new Date().toISOString().split('T')[0];
@@ -647,7 +715,9 @@
       
       appData.receivedHistory = appData.receivedHistory || [];
       appData.receivedHistory.push(newHistoryLog);
-      appData.shipments = appData.shipments.filter(item => item.id !== id);
+      
+      // ลบจากแถวรายการกำลังเดินทาง
+      appData.shipments.splice(index, 1);
 
       saveData();
       renderAll();
@@ -855,7 +925,7 @@
     }
 
     function editSaleLog(id) {
-      const log = appData.salesLogs.find(l => l.id === id);
+      const log = appData.salesLogs.find(l => l.id == id);
       if(!log) return;
 
       const newQtyStr = prompt(`แก้ไขจำนวนผืนที่ขายได้ของวันที่ ${formatDateThai(log.date)}:`, log.qty);
@@ -908,39 +978,6 @@
       return `${months[monthIndex]} ค.ศ. ${yearCE}`;
     }
 
-    function openEditModal(id) {
-      const shipment = appData.shipments.find(item => item.id === id);
-      if(shipment) {
-        document.getElementById('edit-ship-id').value = shipment.id;
-        document.getElementById('edit-ship-close-date').value = shipment.closeDate;
-        document.getElementById('edit-ship-qty').value = shipment.qty;
-        document.getElementById('edit-modal').classList.remove('hidden');
-      }
-    }
-
-    function closeEditModal() {
-      document.getElementById('edit-modal').classList.add('hidden');
-    }
-
-    function saveEditedShipment(e) {
-      e.preventDefault();
-      const id = parseInt(document.getElementById('edit-ship-id').value);
-      const closeDate = document.getElementById('edit-ship-close-date').value;
-      const qty = parseInt(document.getElementById('edit-ship-qty').value) || 0;
-
-      const idx = appData.shipments.findIndex(item => item.id !== id);
-      if(idx !== -1) {
-        appData.shipments[idx].closeDate = closeDate;
-        appData.shipments[idx].qty = qty;
-        appData.shipments.sort((a,b) => new Date(a.closeDate) - new Date(b.closeDate));
-
-        saveData();
-        renderAll();
-        closeEditModal();
-        alert("อัปเดตข้อมูลเดินทางเสร็จสมบูรณ์!");
-      }
-    }
-
     function formatDateThai(dateStr) {
       if(!dateStr) return "-";
       const parts = dateStr.split('-');
@@ -991,43 +1028,9 @@
       alert("เพิ่มรายการส่งของชุดใหม่เรียบร้อย!");
     }
 
-    function deleteShipment(id) {
-      if(confirm("ต้องการลบรายการเดินทางนี้ใช่หรือไม่?")) {
-        appData.shipments = appData.shipments.filter(item => item.id !== id);
-        saveData();
-        renderAll();
-      }
-    }
-
-    function addSaleLog(e) {
-      e.preventDefault();
-      const date = document.getElementById('sale-date').value;
-      const qty = parseInt(document.getElementById('sale-qty').value) || 0;
-      const isDeduct = document.getElementById('deduct-stock').checked;
-
-      const newLog = {
-        id: Date.now(),
-        date,
-        qty,
-        deducted: isDeduct
-      };
-
-      appData.salesLogs.push(newLog);
-
-      if(isDeduct) {
-        appData.currentStock = Math.max(0, appData.currentStock - qty);
-      }
-
-      saveData();
-      renderAll();
-
-      document.getElementById('sale-qty').value = "";
-      alert("เพิ่มยอดขายประจำวันและอัปเดตสต็อกเรียบร้อยแล้ว!");
-    }
-
     function deleteSaleLog(id) {
       if(confirm("ต้องการลบข้อมูลสถิติการขายนี้ใช่หรือไม่?")) {
-        appData.salesLogs = appData.salesLogs.filter(item => item.id !== id);
+        appData.salesLogs = appData.salesLogs.filter(item => item.id != id);
         saveData();
         renderAll();
       }
