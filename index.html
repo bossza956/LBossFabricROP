@@ -50,7 +50,7 @@
 
   <div class="max-w-md mx-auto px-4 mt-6">
     
-    <!-- Tab Navigation (Top Bar) -->
+    <!-- Tab Navigation (Top Bar จัดเรียงใหม่ตามความต้องการ) -->
     <div class="flex space-x-1 bg-white/80 backdrop-blur-md p-1 rounded-2xl shadow-sm mb-6 border border-teal-100 overflow-x-auto scrollbar-none">
       <button onclick="switchTab('dashboard')" id="btn-dashboard" class="flex-1 py-2 px-1 text-xs font-semibold rounded-xl transition-all duration-300 text-center bg-teal-500 text-white shadow-sm whitespace-nowrap">
         ROP
@@ -63,6 +63,9 @@
       </button>
       <button onclick="switchTab('sales')" id="btn-sales" class="flex-1 py-2 px-1 text-xs font-semibold rounded-xl transition-all duration-300 text-center text-slate-600 hover:bg-slate-100 whitespace-nowrap">
         บันทึกยอดขาย
+      </button>
+      <button onclick="switchTab('returns')" id="btn-returns" class="flex-1 py-2 px-1 text-xs font-semibold rounded-xl transition-all duration-300 text-center text-slate-600 hover:bg-slate-100 whitespace-nowrap">
+        สินค้าตีกลับ
       </button>
     </div>
 
@@ -239,6 +242,60 @@
       </div>
     </div>
 
+
+    <!-- ==================== TAB 5: RETURNS (ย้ายมาอยู่หลังสุดตามต้องการ) ==================== -->
+    <div id="tab-returns" class="space-y-6 hidden">
+      <!-- บันทึกสินค้าตีกลับประจำวัน -->
+      <div class="bg-white rounded-3xl p-6 card-shadow border-t-8 border-indigo-400">
+        <h3 class="font-bold text-slate-700 text-lg mb-4 flex items-center">
+          <span class="bg-indigo-100 text-indigo-600 p-2 rounded-xl mr-2"><i class="fa-solid fa-arrow-rotate-left"></i></span>
+          บันทึกสินค้าตีกลับ (ลูกค้าไม่รับ)
+        </h3>
+        <form id="return-form" class="space-y-4" onsubmit="addReturnLog(event)">
+          <div>
+            <label class="block text-xs text-slate-500 mb-1">วันที่ตีกลับ / วันที่ลงบันทึก</label>
+            <input type="date" id="return-date" required class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-500 mb-1">เลข Tracking ตีกลับ (สำหรับการติดตามพัสดุ)</label>
+            <input type="text" id="return-tracking" placeholder="ป้อนเลขพัสดุตีกลับ เช่น TH12345678" class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">จำนวนผืนที่ตีกลับ</label>
+              <input type="number" id="return-qty" required placeholder="เช่น 50" class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">สถานะพัสดุ</label>
+              <!-- ตัวควบคุมการปรับกฎการบวกสต็อกตามสถานะ -->
+              <select id="return-status" onchange="toggleReturnStockCheckbox()" class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 bg-white font-medium">
+                <option value="in-transit" selected>กำลังตีกลับ (ยังไม่ถึงโกดัง)</option>
+                <option value="received">ได้รับแล้ว (ถึงโกดังแล้ว)</option>
+              </select>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2" id="add-back-container" style="display:none;">
+            <input type="checkbox" id="add-back-stock" class="w-5 h-5 text-indigo-500 rounded focus:ring-indigo-400">
+            <label for="add-back-stock" class="text-xs text-slate-600 font-medium">บวกกลับเข้าสต็อกปัจจุบันทันที</label>
+          </div>
+          <button type="submit" class="w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl transition-all shadow-md"><i class="fa-solid fa-plus mr-1"></i> บันทึกข้อมูลสินค้าตีกลับ</button>
+        </form>
+      </div>
+
+      <!-- กลุ่มรายงานแยกรายเดือนสินค้าตีกลับ -->
+      <div class="bg-white rounded-3xl p-6 card-shadow border-t-8 border-violet-400">
+        <div class="mb-4">
+          <h3 class="font-bold text-slate-700 text-lg flex items-center">
+            <span class="bg-violet-100 text-violet-600 p-2 rounded-xl mr-2"><i class="fa-solid fa-boxes-packing"></i></span>
+            ประวัติสินค้าตีกลับแยกรายเดือน
+          </h3>
+        </div>
+        <div class="space-y-4" id="returns-monthly-accordion-container">
+          <!-- โหลดรายการสถิติตีกลับที่นี่ -->
+        </div>
+      </div>
+    </div>
+
     <!-- ==================== SYSTEM SETTINGS ==================== -->
     <div class="mt-8 bg-slate-100/80 backdrop-blur-sm p-4 rounded-3xl border border-slate-200">
       <details class="group">
@@ -292,7 +349,6 @@
         <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-circle-xmark"></i></button>
       </div>
       <form id="edit-shipment-form" class="space-y-4" onsubmit="saveEditedShipment(event)">
-        <!-- เปลี่ยนคีย์จากเก็บไอดีเป็นเก็บตำแหน่งอาร์เรย์ (Index) เพื่อการเรียกใช้ที่แม่นยำ 100% -->
         <input type="hidden" id="edit-ship-index">
         <div>
           <label class="block text-xs text-slate-500 mb-1">วันที่ปิดตู้</label>
@@ -310,23 +366,27 @@
     </div>
   </div>
 
-  <!-- Bottom Nav Bar for Mobile -->
+  <!-- Bottom Nav Bar for Mobile (ย้ายสลับตำแหน่งปุ่ม สินค้าตีกลับ ไปอยู่หลังสุด) -->
   <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-100 py-2 flex justify-around items-center shadow-lg z-50">
-    <button onclick="switchTab('dashboard')" id="nav-dashboard" class="flex flex-col items-center text-teal-500">
+    <button onclick="switchTab('dashboard')" id="nav-dashboard" class="flex flex-col items-center text-teal-500 flex-1">
       <i class="fa-solid fa-chart-pie text-lg"></i>
-      <span class="text-[9px] mt-0.5 font-medium">แดชบอร์ด ROP</span>
+      <span class="text-[8px] mt-0.5 font-medium whitespace-nowrap">ROP</span>
     </button>
-    <button onclick="switchTab('shipments')" id="nav-shipments" class="flex flex-col items-center text-slate-400">
+    <button onclick="switchTab('shipments')" id="nav-shipments" class="flex flex-col items-center text-slate-400 flex-1">
       <i class="fa-solid fa-ship text-lg"></i>
-      <span class="text-[9px] mt-0.5 font-medium">สั่งของจากจีน</span>
+      <span class="text-[8px] mt-0.5 font-medium whitespace-nowrap">สั่งของจากจีน</span>
     </button>
-    <button onclick="switchTab('history')" id="nav-history" class="flex flex-col items-center text-slate-400">
+    <button onclick="switchTab('history')" id="nav-history" class="flex flex-col items-center text-slate-400 flex-1">
       <i class="fa-solid fa-clipboard-check text-lg"></i>
-      <span class="text-[9px] mt-0.5 font-medium">ประวัติถึงไทย</span>
+      <span class="text-[8px] mt-0.5 font-medium whitespace-nowrap">ประวัติถึงไทย</span>
     </button>
-    <button onclick="switchTab('sales')" id="nav-sales" class="flex flex-col items-center text-slate-400">
+    <button onclick="switchTab('sales')" id="nav-sales" class="flex flex-col items-center text-slate-400 flex-1">
       <i class="fa-solid fa-cart-shopping text-lg"></i>
-      <span class="text-[9px] mt-0.5 font-medium">บันทึกยอดขาย</span>
+      <span class="text-[8px] mt-0.5 font-medium whitespace-nowrap">บันทึกยอดขาย</span>
+    </button>
+    <button onclick="switchTab('returns')" id="nav-returns" class="flex flex-col items-center text-slate-400 flex-1">
+      <i class="fa-solid fa-rotate-left text-lg"></i>
+      <span class="text-[8px] mt-0.5 font-medium whitespace-nowrap">สินค้าตีกลับ</span>
     </button>
   </div>
 
@@ -377,14 +437,33 @@
         { id: 4, closeDate: "2026-05-27", qty: 15000 }
       ],
       salesLogs: preseededSales,
-      receivedHistory: [] 
+      receivedHistory: [],
+      returnLogs: [] 
     };
 
-    let appData = JSON.parse(localStorage.getItem('microfiber_rop_data_v4')) || defaultData;
+    // อัปเกรดฐานข้อมูลโครงสร้าง v6 รองรับเลข Tracking และสถานะตีกลับ
+    let appData = JSON.parse(localStorage.getItem('microfiber_rop_data_v6')) || defaultData;
     window.activeCharts = {};
 
+    if (localStorage.getItem('microfiber_rop_data_v5') && !localStorage.getItem('microfiber_rop_data_v6')) {
+      const oldV5 = JSON.parse(localStorage.getItem('microfiber_rop_data_v5'));
+      appData = {
+        ...defaultData,
+        ...oldV5,
+        returnLogs: (oldV5.returnLogs || []).map(log => ({
+          id: log.id || Date.now(),
+          date: log.date,
+          qty: log.qty,
+          trackingNo: log.trackingNo || "-",
+          status: log.status || "received", // กำหนดค่าเริ่มต้นของแถวประวัติเก่าให้เป็นได้รับแล้ว
+          addedBack: log.addedBack !== undefined ? log.addedBack : true
+        }))
+      };
+      saveData();
+    }
+
     // -----------------------------------------------------------------
-    // กำหนดค่าคอนฟิก Firebase เข้ากับระบบ Cloud Firestore ของโครงการ l-boss
+    // คอนฟิก Firebase Cloud Firestore ของโครงการ l-boss
     // -----------------------------------------------------------------
     const firebaseConfig = {
       apiKey: "AIzaSyCXSWM419rJYrzi-ICFj9HJxWLiPICbJHc",
@@ -407,6 +486,7 @@
       docRef.get().then((doc) => {
         if (doc.exists) {
           appData = doc.data();
+          populateSettingsForm(); 
         } else {
           docRef.set(appData);
         }
@@ -421,6 +501,7 @@
       docRef.onSnapshot((doc) => {
         if (doc.exists) {
           appData = doc.data();
+          populateSettingsForm(); 
           renderAll();
         }
       });
@@ -428,6 +509,29 @@
     } catch (e) {
       console.error("การเริ่มต้นใช้งาน Cloud Firestore มีข้อผิดพลาด:", e);
       updateCloudStatus(false);
+    }
+
+    window.onload = function() {
+      populateSettingsForm(); 
+
+      const todayString = new Date().toISOString().split('T')[0];
+      document.getElementById('ship-close-date').value = todayString;
+      document.getElementById('sale-date').value = todayString;
+      document.getElementById('return-date').value = todayString;
+
+      toggleReturnStockCheckbox(); // อัปเดตการแสดงผล checkbox ของฟอร์มตีกลับ
+      renderAll();
+    };
+
+    function populateSettingsForm() {
+      if (document.activeElement.tagName !== 'INPUT') { 
+        document.getElementById('setting-sales-normal').value = appData.salesNormal !== undefined ? appData.salesNormal : 2000;
+        document.getElementById('setting-sales-best').value = appData.salesBest !== undefined ? appData.salesBest : 2041;
+        document.getElementById('setting-lt-normal').value = appData.ltNormal !== undefined ? appData.ltNormal : 19;
+        document.getElementById('setting-lt-delay').value = appData.ltDelay !== undefined ? appData.ltDelay : 30;
+        document.getElementById('setting-test-date').value = appData.testDate || '';
+        document.getElementById('setting-use-test-date').checked = !!appData.useTestDate;
+      }
     }
 
     function updateCloudStatus(isOnline) {
@@ -442,7 +546,7 @@
     }
 
     function saveData() {
-      localStorage.setItem('microfiber_rop_data_v4', JSON.stringify(appData));
+      localStorage.setItem('microfiber_rop_data_v6', JSON.stringify(appData));
       if (docRef) {
         docRef.set(appData).then(() => {
           updateCloudStatus(true);
@@ -467,24 +571,26 @@
       return Math.ceil((t - f) / (1000 * 60 * 60 * 24));
     }
 
+    // ฟังก์ชันสลับเมนู (รองรับการย้ายสินค้าตีกลับไปหลังสุด)
     function switchTab(tabName) {
       document.getElementById('tab-dashboard').classList.add('hidden');
       document.getElementById('tab-shipments').classList.add('hidden');
       document.getElementById('tab-history').classList.add('hidden');
+      document.getElementById('tab-returns').classList.add('hidden');
       document.getElementById('tab-sales').classList.add('hidden');
 
       document.getElementById(`tab-${tabName}`).classList.remove('hidden');
 
-      const tabs = ['dashboard', 'shipments', 'history', 'sales'];
+      const tabs = ['dashboard', 'shipments', 'history', 'sales', 'returns'];
       tabs.forEach(t => {
         const btn = document.getElementById(`btn-${t}`);
         const nav = document.getElementById(`nav-${t}`);
         if(t === tabName) {
           btn.className = "flex-1 py-2 px-1 text-xs font-semibold rounded-xl transition-all duration-300 text-center bg-teal-500 text-white shadow-sm whitespace-nowrap";
-          nav.className = "flex flex-col items-center text-teal-500";
+          nav.className = "flex flex-col items-center text-teal-500 flex-1";
         } else {
           btn.className = "flex-1 py-2 px-1 text-xs font-semibold rounded-xl transition-all duration-300 text-center text-slate-600 hover:bg-slate-100 whitespace-nowrap";
-          nav.className = "flex flex-col items-center text-slate-400";
+          nav.className = "flex flex-col items-center text-slate-400 flex-1";
         }
       });
     }
@@ -540,6 +646,7 @@
       renderShipments(todayStr, salesNormal, ltNormal, ltDelay);
       renderReceivedHistory();
       renderSalesList(); 
+      renderReturnsList(); 
     }
 
     function setBadge(elementId, isSafe) {
@@ -553,7 +660,6 @@
       }
     }
 
-    // เรนเดอร์การเดินทาง: ปรับมาใช้ index ของอาร์เรย์ (Array Index) ในการแก้ไขและลบเพื่อแก้ปัญหาปุ่มกดไม่ติดอย่างเด็ดขาด
     function renderShipments(todayStr, salesNormal, ltNormal, ltDelay) {
       const container = document.getElementById('shipment-list-container');
       container.innerHTML = "";
@@ -588,7 +694,6 @@
         const card = document.createElement('div');
         card.className = "p-4 border border-slate-100 rounded-2xl bg-white card-shadow flex flex-col space-y-3 relative";
         card.innerHTML = `
-          <!-- ตัวควบคุมการกดสัมผัส: ขยาย Touch Target ให้กว้างขึ้น และระบุ z-index ให้ลอยเหนือเลเยอร์อื่น -->
           <div class="absolute top-4 right-4 flex space-x-1.5 z-20">
             <button onclick="openEditModal(${index})" class="text-indigo-500 hover:text-indigo-700 transition p-2 bg-indigo-50 hover:bg-indigo-100 rounded-lg cursor-pointer" title="แก้ไข"><i class="fa-solid fa-pen-to-square text-sm"></i></button>
             <button onclick="deleteShipment(${index})" class="text-rose-500 hover:text-rose-700 transition p-2 bg-rose-50 hover:bg-rose-100 rounded-lg cursor-pointer" title="ลบ"><i class="fa-solid fa-trash-can text-sm"></i></button>
@@ -629,7 +734,6 @@
             ${warningHTML}
           </div>
 
-          <!-- ปุ่มรับสินค้าเข้าคลัง (สลับมาคุมด้วย Index เพื่อความเสถียรสูงสุด) -->
           <button onclick="receiveShipment(${index})" class="w-full mt-2 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center space-x-1.5">
             <i class="fa-solid fa-circle-check text-sm"></i>
             <span>กดรับของเข้าคลัง (+สต็อกหลัก)</span>
@@ -639,7 +743,6 @@
       });
     }
 
-    // ฟังก์ชันเปิดหน้าต่างแก้ไขด้วย Array Index (ขจัดปัญหาเรื่องประเภท ID ไม่ตรงกันของคลาวด์)
     function openEditModal(index) {
       const shipment = appData.shipments[index];
       if(shipment) {
@@ -654,7 +757,6 @@
       document.getElementById('edit-modal').classList.add('hidden');
     }
 
-    // บันทึกแก้ไขด้วยตำแหน่ง Array Index
     function saveEditedShipment(e) {
       e.preventDefault();
       const index = parseInt(document.getElementById('edit-ship-index').value);
@@ -673,7 +775,6 @@
       }
     }
 
-    // กดลบด้วยตำแหน่ง Array Index
     function deleteShipment(index) {
       if(confirm("ต้องการลบรายการเดินทางนี้ใช่หรือไม่?")) {
         appData.shipments.splice(index, 1);
@@ -682,7 +783,6 @@
       }
     }
 
-    // กดรับของด้วยตำแหน่ง Array Index
     function receiveShipment(index) {
       const shipment = appData.shipments[index];
       if(!shipment) return;
@@ -715,8 +815,6 @@
       
       appData.receivedHistory = appData.receivedHistory || [];
       appData.receivedHistory.push(newHistoryLog);
-      
-      // ลบจากแถวรายการกำลังเดินทาง
       appData.shipments.splice(index, 1);
 
       saveData();
@@ -766,12 +864,250 @@
       }
     }
 
+    // -------------------------------------------------------------
+    // ระบบควบคุมและการตั้งค่า "สินค้าตีกลับ" (Return Logs System)
+    // -------------------------------------------------------------
+    function toggleReturnStockCheckbox() {
+      const status = document.getElementById('return-status').value;
+      const container = document.getElementById('add-back-container');
+      
+      // จะยอมให้ติ๊กบวกสต็อกปัจจุบันเฉพาะเมื่อเปลี่ยนสถานะเป็น "ได้รับแล้ว" ตั้งแต่เริ่มกรอกเท่านั้น
+      if (status === 'received') {
+        container.style.display = 'flex';
+      } else {
+        container.style.display = 'none';
+        document.getElementById('add-back-stock').checked = false;
+      }
+    }
+
+    function addReturnLog(e) {
+      e.preventDefault();
+      const date = document.getElementById('return-date').value;
+      const qty = parseInt(document.getElementById('return-qty').value) || 0;
+      const trackingNo = document.getElementById('return-tracking').value.trim() || "-";
+      const status = document.getElementById('return-status').value; // 'in-transit' หรือ 'received'
+      const isAddBack = document.getElementById('add-back-stock').checked;
+
+      const newLog = {
+        id: Date.now(),
+        date,
+        qty,
+        trackingNo,
+        status,
+        addedBack: isAddBack
+      };
+
+      appData.returnLogs = appData.returnLogs || [];
+      appData.returnLogs.push(newLog);
+
+      // บวกเข้าคลังได้ต่อเมื่อของมาถึงแล้วและติ๊กยอมรับ
+      if (isAddBack && status === 'received') {
+        appData.currentStock = (parseInt(appData.currentStock) || 0) + qty;
+      }
+
+      saveData();
+      renderAll();
+
+      // เคลียร์ฟอร์ม
+      document.getElementById('return-qty').value = "";
+      document.getElementById('return-tracking').value = "";
+      document.getElementById('return-status').value = "in-transit";
+      toggleReturnStockCheckbox();
+
+      alert("บันทึกข้อมูลสินค้าตีกลับเรียบร้อยแล้ว!");
+    }
+
+    function renderReturnsList() {
+      const container = document.getElementById('returns-monthly-accordion-container');
+      container.innerHTML = "";
+
+      const returnLogs = appData.returnLogs || [];
+
+      if (returnLogs.length === 0) {
+        container.innerHTML = "<p class='text-sm text-slate-400 text-center py-8'><i class='fa-solid fa-box-open block text-2xl mb-2 opacity-55'></i>ไม่มีข้อมูลประวัติสินค้าตีกลับในระบบ</p>";
+        return;
+      }
+
+      const monthlyGroups = {};
+      returnLogs.forEach(log => {
+        const monthKey = log.date.substring(0, 7);
+        if (!monthlyGroups[monthKey]) {
+          monthlyGroups[monthKey] = [];
+        }
+        monthlyGroups[monthKey].push(log);
+      });
+
+      const sortedMonthKeys = Object.keys(monthlyGroups).sort().reverse();
+
+      sortedMonthKeys.forEach(monthKey => {
+        const logs = monthlyGroups[monthKey];
+        let totalReturned = 0;
+        logs.forEach(l => totalReturned += parseInt(l.qty) || 0);
+
+        const sortedLogsAsc = [...logs].sort((a,b) => new Date(a.date) - new Date(b.date));
+        const monthTitle = getThaiMonthName(monthKey);
+
+        const accordionId = `return-accordion-${monthKey}`;
+        const panelId = `return-panel-${monthKey}`;
+
+        const accordionDiv = document.createElement('div');
+        accordionDiv.className = "border border-slate-100 rounded-3xl overflow-hidden card-shadow bg-white";
+        accordionDiv.innerHTML = `
+          <button onclick="toggleReturnAccordion('${monthKey}')" id="${accordionId}" class="w-full text-left p-4 bg-slate-50/50 hover:bg-slate-100/70 transition flex justify-between items-center border-b border-slate-50">
+            <div>
+              <p class="font-bold text-slate-800 text-sm flex items-center">
+                <i class="fa-solid fa-rotate-left text-indigo-500 mr-2"></i> ${monthTitle}
+              </p>
+              <p class="text-[11px] text-slate-400 mt-1">
+                ตีกลับรวมทั้งเดือน: <strong class="text-indigo-600">${totalReturned.toLocaleString()}</strong> ผืน
+              </p>
+            </div>
+            <span id="return-arrow-${monthKey}" class="text-slate-400 transition-transform duration-300"><i class="fa-solid fa-chevron-down"></i></span>
+          </button>
+
+          <div id="${panelId}" class="hidden p-4 space-y-4 bg-white">
+            <div>
+              <div class="flex justify-between items-center mb-2">
+                <p class="text-[11px] font-bold text-slate-400"><i class="fa-solid fa-list-ul mr-1"></i> รายการสินค้าตีกลับประจำวัน</p>
+                <button onclick="clearMonthReturns('${monthKey}')" class="text-rose-500 hover:text-rose-700 text-[10px] font-semibold flex items-center"><i class="fa-solid fa-trash-can mr-1"></i> ล้างประวัติตีกลับเดือนนี้</button>
+              </div>
+              
+              <!-- ล็อกสถิติแบบระบุสถานะสีแยกพัสดุ -->
+              <div class="space-y-3 max-h-64 overflow-y-auto scrollbar-none border-t pt-2">
+                ${sortedLogsAsc.map(log => {
+                  const isTransit = log.status === 'in-transit';
+                  const statusBadge = isTransit 
+                    ? `<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold text-[9px]"><i class="fa-solid fa-truck animate-pulse mr-1"></i>กำลังตีกลับ</span>` 
+                    : `<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold text-[9px]"><i class="fa-solid fa-circle-check mr-1"></i>ได้รับเข้าคลังแล้ว</span>`;
+                  
+                  return `
+                    <div class="p-3 border border-slate-100 rounded-2xl bg-slate-50/40 text-[11px] space-y-2">
+                      <div class="flex justify-between items-start">
+                        <div>
+                          <p class="font-bold text-slate-700 text-xs">${formatDateThai(log.date)}</p>
+                          <p class="text-slate-500 mt-1">จำนวนตีกลับ: <strong class="text-slate-700">${log.qty.toLocaleString()}</strong> ผืน</p>
+                          <p class="text-[10px] text-slate-400 mt-0.5">Tracking: <strong class="text-slate-600">${log.trackingNo}</strong></p>
+                        </div>
+                        <div class="flex space-x-1">
+                          <button onclick="editReturnLog(${log.id})" class="text-indigo-400 hover:text-indigo-600 p-1.5 bg-white border rounded-lg" title="แก้ไขยอดตีกลับ"><i class="fa-solid fa-pen-to-square"></i></button>
+                          <button onclick="deleteReturnLog(${log.id})" class="text-slate-300 hover:text-rose-500 p-1.5 bg-white border rounded-lg" title="ลบ"><i class="fa-solid fa-trash-can"></i></button>
+                        </div>
+                      </div>
+                      
+                      <div class="flex justify-between items-center pt-2 border-t border-dashed border-slate-200">
+                        ${statusBadge}
+                        ${isTransit ? `
+                          <!-- ปุ่มเร่งรับของเข้าสต็อกทันทีเมื่อพัสดุตีกลับมาถึงมือ -->
+                          <button onclick="markReturnAsReceived(${log.id})" class="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-bold rounded-lg transition-all text-[9px] flex items-center space-x-1 shadow-sm cursor-pointer">
+                            <i class="fa-solid fa-box-open"></i>
+                            <span>ของถึงคลังแล้ว (กดรับผ้าเข้าสต็อก)</span>
+                          </button>
+                        ` : '<span class="text-[9px] text-emerald-600 font-semibold"><i class="fa-solid fa-circle-check mr-0.5"></i>บวกเข้าสต็อกผ้าเรียบร้อย</span>'}
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+        container.appendChild(accordionDiv);
+      });
+    }
+
+    function toggleReturnAccordion(monthKey) {
+      const panel = document.getElementById(`return-panel-${monthKey}`);
+      const arrow = document.getElementById(`return-arrow-${monthKey}`);
+      const isExpanded = !panel.classList.contains('hidden');
+
+      if (isExpanded) {
+        panel.classList.add('hidden');
+        arrow.style.transform = 'rotate(0deg)';
+      } else {
+        panel.classList.remove('hidden');
+        arrow.style.transform = 'rotate(180deg)';
+      }
+    }
+
+    // ฟังก์ชันกดรับพัสดุตีกลับเมื่อถึงไทยแล้ว (เปลี่ยนสถานะ + บวกยอดเข้าสต็อกปัจจุบันทันที)
+    function markReturnAsReceived(id) {
+      const log = appData.returnLogs.find(l => l.id == id);
+      if (log && log.status === 'in-transit') {
+        if (confirm(`ยืนยันการรับพัสดุตีกลับเลข Tracking: "${log.trackingNo}" จำนวน ${log.qty.toLocaleString()} ผืน แล้วใช่หรือไม่?\n(ระบบจะเปลี่ยนสถานะเป็นได้รับแล้ว และบวกผ้าเข้าสต็อกคลังหลักให้ทันที)`)) {
+          
+          log.status = 'received';
+          log.addedBack = true;
+          
+          // บวกยอดสต็อกจริง
+          appData.currentStock = (parseInt(appData.currentStock) || 0) + log.qty;
+
+          saveData();
+          renderAll();
+          alert("กดรับพัสดุตีกลับและปรับระดับสต็อกเข้าคลังหลักเรียบร้อยแล้ว!");
+        }
+      }
+    }
+
+    function editReturnLog(id) {
+      const log = appData.returnLogs.find(l => l.id == id);
+      if(!log) return;
+
+      const newTracking = prompt(`แก้ไขเลข Tracking ของวันที่ ${formatDateThai(log.date)}:`, log.trackingNo);
+      if (newTracking === null) return;
+
+      const newQtyStr = prompt(`แก้ไขจำนวนสินค้าตีกลับ (ผืน):`, log.qty);
+      if (newQtyStr === null) return;
+
+      const newQty = parseInt(newQtyStr);
+      if (isNaN(newQty) || newQty < 0) {
+        alert("กรุณากรอกตัวเลขจำนวนที่ถูกต้องด้วยครับ");
+        return;
+      }
+
+      // ระบบอัจฉริยะปรับความเสี่ยงและสต็อกส่วนต่างตามสถานะที่มีผล
+      if (log.addedBack && log.status === 'received') {
+        const diff = newQty - log.qty;
+        appData.currentStock = Math.max(0, (parseInt(appData.currentStock) || 0) + diff);
+      }
+
+      log.trackingNo = newTracking.trim() || "-";
+      log.qty = newQty;
+      saveData();
+      renderAll();
+      alert("แก้ไขยอดและประวัติสินค้าตีกลับสำเร็จ!");
+    }
+
+    function deleteReturnLog(id) {
+      if(confirm("ต้องการลบข้อมูลสถิติสินค้าตีกลับรายการนี้ใช่หรือไม่?")) {
+        const log = appData.returnLogs.find(l => l.id == id);
+        if (log && log.addedBack && log.status === 'received') {
+          appData.currentStock = Math.max(0, (parseInt(appData.currentStock) || 0) - log.qty);
+        }
+        appData.returnLogs = appData.returnLogs.filter(item => item.id != id);
+        saveData();
+        renderAll();
+      }
+    }
+
+    function clearMonthReturns(monthKey) {
+      const monthTitle = getThaiMonthName(monthKey);
+      if (confirm(`ต้องการลบสถิติตีกลับทั้งหมดของเดือน "${monthTitle}" หรือไม่?\n(สถิติจะถูกลบถาวรและไม่ปรับปรุงยอดคืนสต็อกหลังลบ)`)) {
+        appData.returnLogs = appData.returnLogs.filter(log => !log.date.startsWith(monthKey));
+        saveData();
+        renderAll();
+        alert(`ล้างข้อมูลสถิติตีกลับของเดือน ${monthTitle} เรียบร้อยแล้ว`);
+      }
+    }
+
+    // -------------------------------------------------------------
+    // ระบบยอดขาย (Sales Logs)
+    // -------------------------------------------------------------
     function renderSalesList() {
       const container = document.getElementById('sales-monthly-accordion-container');
       container.innerHTML = "";
 
       if (appData.salesLogs.length === 0) {
-        container.innerHTML = "<p class='text-sm text-slate-400 text-center py-8'><i class='fa-solid fa-chart-bar block text-2xl mb-2 opacity-55'></i>ยังไม่มีประวัติการขายสินค้าในระบบ</p>";
+        container.innerHTML = "<p class='text-sm text-slate-400 text-center py-4'>ยังไม่มีประวัติการขายสินค้าในระบบ</p>";
         return;
       }
 
@@ -855,9 +1191,8 @@
     }
 
     function toggleMonthAccordion(monthKey) {
-      const panel = document.getElementById(`panel-${monthKey}`);
-      const arrow = document.getElementById(`arrow-${monthKey}`);
-      
+      const panel = document.getElementById('panel-' + monthKey);
+      const arrow = document.getElementById('arrow-' + monthKey);
       const isExpanded = !panel.classList.contains('hidden');
 
       if (isExpanded) {
@@ -866,7 +1201,6 @@
       } else {
         panel.classList.remove('hidden');
         arrow.style.transform = 'rotate(180deg)';
-        
         initMonthlyChart(monthKey);
       }
     }
@@ -885,7 +1219,7 @@
         window.activeCharts[monthKey].destroy();
       }
 
-      const canvasCtx = document.getElementById(`chart-${monthKey}`).getContext('2d');
+      const canvasCtx = document.getElementById('chart-' + monthKey).getContext('2d');
       window.activeCharts[monthKey] = new Chart(canvasCtx, {
         type: 'line',
         data: {
@@ -1026,6 +1360,32 @@
       
       document.getElementById('ship-qty').value = "";
       alert("เพิ่มรายการส่งของชุดใหม่เรียบร้อย!");
+    }
+
+    function addSaleLog(e) {
+      e.preventDefault();
+      const date = document.getElementById('sale-date').value;
+      const qty = parseInt(document.getElementById('sale-qty').value) || 0;
+      const isDeduct = document.getElementById('deduct-stock').checked;
+
+      const newLog = {
+        id: Date.now(),
+        date,
+        qty,
+        deducted: isDeduct
+      };
+
+      appData.salesLogs.push(newLog);
+
+      if(isDeduct) {
+        appData.currentStock = Math.max(0, appData.currentStock - qty);
+      }
+
+      saveData();
+      renderAll();
+
+      document.getElementById('sale-qty').value = "";
+      alert("เพิ่มยอดขายประจำวันและอัปเดตสต็อกเรียบร้อยแล้ว!");
     }
 
     function deleteSaleLog(id) {
