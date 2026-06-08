@@ -50,7 +50,7 @@
 
   <div class="max-w-md mx-auto px-4 mt-6">
     
-    <!-- Tab Navigation (Top Bar จัดเรียงใหม่ตามความต้องการ) -->
+    <!-- Tab Navigation (Top Bar จัดเรียงใหม่ ย้ายสินค้าตีกลับไปหลังสุด) -->
     <div class="flex space-x-1 bg-white/80 backdrop-blur-md p-1 rounded-2xl shadow-sm mb-6 border border-teal-100 overflow-x-auto scrollbar-none">
       <button onclick="switchTab('dashboard')" id="btn-dashboard" class="flex-1 py-2 px-1 text-xs font-semibold rounded-xl transition-all duration-300 text-center bg-teal-500 text-white shadow-sm whitespace-nowrap">
         ROP
@@ -243,7 +243,7 @@
     </div>
 
 
-    <!-- ==================== TAB 5: RETURNS (ย้ายมาอยู่หลังสุดตามต้องการ) ==================== -->
+    <!-- ==================== TAB 5: RETURNS (ย้ายสินค้าตีกลับมาหลังสุดเรียบร้อย) ==================== -->
     <div id="tab-returns" class="space-y-6 hidden">
       <!-- บันทึกสินค้าตีกลับประจำวัน -->
       <div class="bg-white rounded-3xl p-6 card-shadow border-t-8 border-indigo-400">
@@ -291,7 +291,7 @@
           </h3>
         </div>
         <div class="space-y-4" id="returns-monthly-accordion-container">
-          <!-- โหลดรายการสถิติตีกลับที่นี่ -->
+          <!-- รายการสถิติตีกลับ -->
         </div>
       </div>
     </div>
@@ -563,12 +563,24 @@
       return date.toISOString().split('T')[0];
     }
 
-    function getDaysDiff(fromDate, toDate) {
-      const f = new Date(fromDate);
-      f.setHours(0,0,0,0);
-      const t = new Date(toDate);
-      t.setHours(0,0,0,0);
-      return Math.ceil((t - f) / (1000 * 60 * 60 * 24));
+    // -------------------------------------------------------------
+    // ปรับปรุงฟังก์ชันคำนวณระยะวันเดินทางให้ตัดปัญหาเรื่องเขตเวลา (Timezone Bug)
+    // -------------------------------------------------------------
+    function getDaysDiff(fromDateStr, toDateStr) {
+      const fParts = fromDateStr.split('-');
+      const tParts = toDateStr.split('-');
+      // สั่งดึงค่าผ่านวันปฏิทินท้องถิ่นโดยตรง เพื่อตัดปัญหาความต่างของเขตเวลา (Timezone offset) ออกไป 100%
+      const f = new Date(parseInt(fParts[0]), parseInt(fParts[1]) - 1, parseInt(fParts[2]));
+      const t = new Date(parseInt(tParts[0]), parseInt(tParts[1]) - 1, parseInt(tParts[2]));
+      return Math.round((t - f) / (1000 * 60 * 60 * 24));
+    }
+
+    // ฟังก์ชันช่วยดึงค่าวันปัจจุบันในระบบออฟไลน์แบบไม่แปลงเวลา UTC เพื่อตัดบั๊กนับวันถอยหลังขาดไป 1 วัน
+    function getLocalDateString(dateObj) {
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     }
 
     // ฟังก์ชันสลับเมนู (รองรับการย้ายสินค้าตีกลับไปหลังสุด)
@@ -601,12 +613,13 @@
       const ltNormal = parseInt(appData.ltNormal) || 0;
       const ltDelay = parseInt(appData.ltDelay) || 0;
 
-      let today = new Date();
+      // วันที่ตั้งต้นสำหรับตรวจสอบ
+      let todayStr = "";
       if (appData.useTestDate && appData.testDate) {
-        today = new Date(appData.testDate);
+        todayStr = appData.testDate;
+      } else {
+        todayStr = getLocalDateString(new Date()); // ปรับมาใช้วิธีดึงวันแบบท้องถิ่น (ไม่หลุดถอยหลังไป 1 วันแบบ ISO)
       }
-      today.setHours(0,0,0,0);
-      const todayStr = today.toISOString().split('T')[0];
 
       let totalPendingStock = 0;
       appData.shipments.forEach(item => {
