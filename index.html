@@ -366,6 +366,31 @@
     </div>
   </div>
 
+  <!-- ==================== MODAL: EDIT SALE ==================== -->
+  <div id="edit-sale-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-white rounded-3xl w-full max-w-sm p-6 card-shadow border-t-8 border-emerald-500">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="font-bold text-slate-700 text-lg"><i class="fa-solid fa-edit mr-1 text-emerald-500"></i> แก้ไขข้อมูลยอดขาย</h3>
+        <button onclick="closeEditSaleModal()" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-circle-xmark"></i></button>
+      </div>
+      <form id="edit-sale-form" class="space-y-4" onsubmit="saveEditedSale(event)">
+        <input type="hidden" id="edit-sale-id">
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">วันที่ขาย</label>
+          <input type="date" id="edit-sale-date" required class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">จำนวนผืนที่ขายได้</label>
+          <input type="number" id="edit-sale-qty" required class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400">
+        </div>
+        <div class="flex space-x-3 pt-2">
+          <button type="button" onclick="closeEditSaleModal()" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl transition-all">ยกเลิก</button>
+          <button type="submit" class="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition-all shadow-md">บันทึกแก้ไข</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Bottom Nav Bar for Mobile (ย้ายสลับตำแหน่งปุ่ม สินค้าตีกลับ ไปอยู่หลังสุด) -->
   <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-100 py-2 flex justify-around items-center shadow-lg z-50">
     <button onclick="switchTab('dashboard')" id="nav-dashboard" class="flex flex-col items-center text-teal-500 flex-1">
@@ -1273,29 +1298,43 @@
 
     function editSaleLog(id) {
       const log = appData.salesLogs.find(l => l.id == id);
-      if(!log) return;
-
-      const newQtyStr = prompt(`แก้ไขจำนวนผืนที่ขายได้ของวันที่ ${formatDateThai(log.date)}:`, log.qty);
-      if (newQtyStr === null) return; 
-
-      const newQty = parseInt(newQtyStr);
-      if (isNaN(newQty) || newQty < 0) {
-        alert("กรุณากรอกตัวเลขจำนวนผืนที่ถูกต้องด้วยครับ");
-        return;
+      if(log) {
+        document.getElementById('edit-sale-id').value = id;
+        document.getElementById('edit-sale-date').value = log.date;
+        document.getElementById('edit-sale-qty').value = log.qty;
+        document.getElementById('edit-sale-modal').classList.remove('hidden');
       }
+    }
 
-      if (log.deducted) {
-        const diff = newQty - log.qty;
-        appData.currentStock = Math.max(0, appData.currentStock - diff);
+    function closeEditSaleModal() {
+      document.getElementById('edit-sale-modal').classList.add('hidden');
+    }
+
+    function saveEditedSale(e) {
+      e.preventDefault();
+      const id = parseInt(document.getElementById('edit-sale-id').value);
+      const newDate = document.getElementById('edit-sale-date').value;
+      const newQty = parseInt(document.getElementById('edit-sale-qty').value) || 0;
+
+      const log = appData.salesLogs.find(l => l.id == id);
+      if(log) {
+        if (log.deducted) {
+          const diff = newQty - log.qty;
+          appData.currentStock = Math.max(0, appData.currentStock - diff);
+        }
+
+        log.date = newDate;
+        log.qty = newQty;
+        appData.salesLogs.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        saveData();
+        renderAll();
+        closeEditSaleModal();
+
+        const monthKey = log.date.substring(0, 7);
+        initMonthlyChart(monthKey);
+        alert("อัปเดตข้อมูลยอดขายและสต็อกเสร็จสมบูรณ์!");
       }
-
-      log.qty = newQty;
-      saveData();
-      renderAll();
-
-      const monthKey = log.date.substring(0, 7);
-      initMonthlyChart(monthKey);
-      alert("แก้ไขสถิติและคำนวณปรับยอดสต็อกให้เรียบร้อยแล้ว!");
     }
 
     function clearMonthSales(monthKey) {
@@ -1403,6 +1442,10 @@
 
     function deleteSaleLog(id) {
       if(confirm("ต้องการลบข้อมูลสถิติการขายนี้ใช่หรือไม่?")) {
+        const log = appData.salesLogs.find(l => l.id == id);
+        if (log && log.deducted) {
+          appData.currentStock = (parseInt(appData.currentStock) || 0) + log.qty;
+        }
         appData.salesLogs = appData.salesLogs.filter(item => item.id != id);
         saveData();
         renderAll();
