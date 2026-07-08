@@ -167,6 +167,10 @@
             <input type="text" id="ship-order-no" placeholder="เช่น ORD12345" class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-400">
           </div>
           <div>
+            <label class="block text-xs text-slate-500 mb-1">วันที่สั่งของ</label>
+            <input type="date" id="ship-order-date" required class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-400">
+          </div>
+          <div>
             <label class="block text-xs text-slate-500 mb-1">จำนวนที่สั่ง (ผืน)</label>
             <input type="number" id="ship-qty" required placeholder="เช่น 15000" class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-400">
           </div>
@@ -363,6 +367,10 @@
           <input type="text" id="edit-ship-order-no" class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
         </div>
         <div>
+          <label class="block text-xs text-slate-500 mb-1">วันที่สั่งของ</label>
+          <input type="date" id="edit-ship-order-date" required class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
+        </div>
+        <div>
           <label class="block text-xs text-slate-500 mb-1">จำนวนที่สั่ง (ผืน)</label>
           <input type="number" id="edit-ship-qty" required class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400">
         </div>
@@ -549,6 +557,7 @@
 
       const todayString = new Date().toISOString().split('T')[0];
       document.getElementById('ship-close-date').value = todayString;
+      document.getElementById('ship-order-date').value = todayString;
       document.getElementById('sale-date').value = todayString;
       document.getElementById('return-date').value = todayString;
 
@@ -751,6 +760,7 @@
               ${item.qty.toLocaleString()} ผืน
             </p>
             <p class="text-xs text-slate-500 mt-1"><i class="fa-solid fa-hashtag mr-1 text-slate-400"></i>เลข ออเดอร์: <strong class="text-slate-700">${item.orderNo || "-"}</strong></p>
+            <p class="text-xs text-slate-500 mt-0.5"><i class="fa-solid fa-calendar mr-1 text-slate-400"></i>วันที่สั่งของ: <strong class="text-slate-700">${item.orderDate ? formatDateThai(item.orderDate) : "-"}</strong></p>
             <p class="text-xs text-slate-500 mt-0.5"><i class="fa-solid fa-calendar-check mr-1 text-slate-400"></i>วันที่ปิดตู้: <strong class="text-slate-700">${formatDateThai(item.closeDate)}</strong></p>
           </div>
 
@@ -797,6 +807,7 @@
         document.getElementById('edit-ship-close-date').value = shipment.closeDate;
         document.getElementById('edit-ship-qty').value = shipment.qty;
         document.getElementById('edit-ship-order-no').value = shipment.orderNo || "";
+        document.getElementById('edit-ship-order-date').value = shipment.orderDate || "";
         document.getElementById('edit-modal').classList.remove('hidden');
       }
     }
@@ -811,11 +822,13 @@
       const closeDate = document.getElementById('edit-ship-close-date').value;
       const qty = parseInt(document.getElementById('edit-ship-qty').value) || 0;
       const orderNo = document.getElementById('edit-ship-order-no').value.trim() || "-";
+      const orderDate = document.getElementById('edit-ship-order-date').value;
 
       if(appData.shipments[index] !== undefined) {
         appData.shipments[index].closeDate = closeDate;
         appData.shipments[index].qty = qty;
         appData.shipments[index].orderNo = orderNo;
+        appData.shipments[index].orderDate = orderDate;
         appData.shipments.sort((a,b) => new Date(a.closeDate) - new Date(b.closeDate));
 
         saveData();
@@ -861,7 +874,8 @@
         receivedDate: inputArrivalDate,
         qty: shipment.qty,
         actualDays: actualTransitDays,
-        orderNo: shipment.orderNo || "-"
+        orderNo: shipment.orderNo || "-",
+        orderDate: shipment.orderDate || ""
       };
       
       appData.receivedHistory = appData.receivedHistory || [];
@@ -892,6 +906,7 @@
           <div>
             <p class="font-bold text-emerald-800 text-sm">รับแล้ว +${item.qty.toLocaleString()} ผืน</p>
             <p class="text-[10px] text-slate-500 mt-1"><i class="fa-solid fa-hashtag mr-1 text-slate-400"></i>ออเดอร์: <strong class="text-slate-700">${item.orderNo || "-"}</strong></p>
+            <p class="text-[10px] text-slate-500 mt-0.5"><i class="fa-solid fa-calendar mr-1 text-slate-400"></i>สั่งของ: <strong class="text-slate-700">${item.orderDate ? formatDateThai(item.orderDate) : "-"}</strong></p>
             <p class="text-[10px] text-slate-500 mt-1">
               <span class="inline-block bg-slate-200/80 px-2 py-0.5 rounded text-slate-700">ปิดตู้: ${formatDateThai(item.closeDate)}</span>
               <span class="mx-1 text-slate-400">➔</span>
@@ -1412,12 +1427,14 @@
       const closeDate = document.getElementById('ship-close-date').value;
       const qty = parseInt(document.getElementById('ship-qty').value) || 0;
       const orderNo = document.getElementById('ship-order-no').value.trim() || "-";
+      const orderDate = document.getElementById('ship-order-date').value;
 
       const newShip = {
         id: Date.now(),
         closeDate,
         qty,
-        orderNo
+        orderNo,
+        orderDate
       };
 
       appData.shipments.push(newShip);
@@ -1428,6 +1445,8 @@
       
       document.getElementById('ship-qty').value = "";
       document.getElementById('ship-order-no').value = "";
+      const todayString = new Date().toISOString().split('T')[0];
+      document.getElementById('ship-order-date').value = todayString;
       alert("เพิ่มรายการส่งของชุดใหม่เรียบร้อย!");
     }
 
